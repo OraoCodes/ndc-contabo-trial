@@ -1,0 +1,18 @@
+[Unit]
+Description=NDC Node API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/ndc
+Environment=NODE_ENV=production
+# Use node binary directly to avoid npm path issues; adjust if needed
+ExecStart=/usr/bin/node dist/server/node-build.mjs
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target
