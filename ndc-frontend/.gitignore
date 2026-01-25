@@ -24,7 +24,10 @@ dist-ssr
 *.sw?
 
 .config/
-!.env
+.env
+.env.production
+.env.local
+.env.*.local
 
 # Database files (SQLite - no longer used, migrated to Supabase)
 *.db
