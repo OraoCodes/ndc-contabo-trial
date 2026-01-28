@@ -6,6 +6,7 @@ import { useParams } from "react-router-dom"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { IndicatorSection } from "@/components/indicator-section"
+import { KenyaInteractiveMap } from "@/components/KenyaInteractiveMap"
 import { Loader2 } from "lucide-react"
 import { listCounties, getCountyPerformance, listIndicators } from "@/lib/supabase-api"
 import { supabase } from "@/lib/supabase"
@@ -104,6 +105,7 @@ export default function CountyPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [nationalRank, setNationalRank] = useState<number | null>(null)
+  const [activeSector, setActiveSector] = useState<"water" | "waste">("water")
 
   // Map flat indicator array → official grouped structure with real scores
   const mapIndicators = (rawIndicators: any, officialGroups: typeof WATER_INDICATORS | typeof WASTE_INDICATORS, indicatorDefinitions: any[] = []) => {
@@ -310,8 +312,37 @@ export default function CountyPage() {
         {/* Score Summary */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
           <div className="lg:col-span-5">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 sticky top-24">
-              <img src="/image 9.svg" alt="Kenya Map" className="w-full" />
+            <div className="relative sticky top-24">
+              {/* Sector Toggle - Top Right */}
+              <div className="absolute top-0 right-0 z-10 flex gap-2">
+                <button
+                  onClick={() => setActiveSector("water")}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+                    activeSector === "water"
+                      ? "bg-blue-600 text-white shadow-md"
+                      : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200"
+                  }`}
+                >
+                  Water
+                </button>
+                <button
+                  onClick={() => setActiveSector("waste")}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+                    activeSector === "waste"
+                      ? "bg-green-600 text-white shadow-md"
+                      : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200"
+                  }`}
+                >
+                  Waste
+                </button>
+              </div>
+              
+              {/* Map without background */}
+              <KenyaInteractiveMap
+                sector={activeSector}
+                year={2025}
+                highlightedCounty={data.name}
+              />
             </div>
           </div>
 

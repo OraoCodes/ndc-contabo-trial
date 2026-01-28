@@ -4,10 +4,10 @@ import { useState, useEffect } from "react"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { HeroBanner } from "@/components/hero-banner"
-import { KenyaMap } from "@/components/kenya-map"
+import { KenyaInteractiveMap } from "@/components/KenyaInteractiveMap"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { listThematicAreas, listPublications, getCountySummaryPerformance, type ThematicArea, type CountySummaryPerformance } from "@/lib/supabase-api"
 
 // Publication interface matching database schema
@@ -33,11 +33,13 @@ interface RankedCounty extends CountySummaryPerformance {
 
 
 export default function Home() {
+    const navigate = useNavigate()
     const [activeTab, setActiveTab] = useState("water")
     const [thematicAreas, setThematicAreas] = useState<ThematicArea[]>([])
     const [publications, setPublications] = useState<Publication[]>([])
     const [waterSummaryData, setWaterSummaryData] = useState<CountySummaryPerformance[]>([])
     const [wasteSummaryData, setWasteSummaryData] = useState<CountySummaryPerformance[]>([])
+    const [dataYear, setDataYear] = useState<number>(2025)
 
     const [loadingThematicAreas, setLoadingThematicAreas] = useState(true)
     const [loadingPublications, setLoadingPublications] = useState(true)
@@ -90,9 +92,11 @@ export default function Home() {
                             
                             if (water.length > 0 && waterData.length === 0) {
                                 waterData = water;
+                                setDataYear(year);
                             }
                             if (waste.length > 0 && wasteData.length === 0) {
                                 wasteData = waste;
+                                if (waterData.length === 0) setDataYear(year);
                             }
                         } catch (err) {
                             // Continue to next year
@@ -165,41 +169,49 @@ export default function Home() {
 
             <section className="py-12 md:py-16 bg-slate-50">
                 <div className="max-w-7xl mx-auto px-4 md:px-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                        {/* Map */}
-                        <div className="flex flex-col items-center justify-center">
-                            {/* <KenyaMap /> */}
-                            <img src="/image 9.svg" alt="Background" />
+                    <h2 className="text-3xl font-bold mb-8">County Performance Overview</h2>
+                    
+                    {/* Tab Controls */}
+                    <div className="flex gap-3 mb-8">
+                        <button
+                            onClick={() => setActiveTab("water")}
+                            className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-colors ${activeTab === "water"
+                                ? "bg-slate-900 text-white"
+                                : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                                }`}
+                        >
+                            Water Management
+                        </button>
+                        <button
+                            onClick={() => setActiveTab("waste")}
+                            className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-colors ${activeTab === "waste"
+                                ? "bg-slate-900 text-white"
+                                : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                                }`}
+                        >
+                            Waste Management
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* Interactive Map */}
+                        <div>
+                            <KenyaInteractiveMap
+                                sector={activeTab as "water" | "waste"}
+                                year={dataYear}
+                                onCountyClick={(countyName) => {
+                                    const slug = countyName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
+                                    navigate(`/county/${slug}`)
+                                }}
+                            />
                         </div>
 
-                        {/* Content */}
+                        {/* Table Section */}
                         <div>
-                            <div className="flex gap-3 mb-6">
-                                <button
-                                    onClick={() => setActiveTab("water")}
-                                    className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-colors ${activeTab === "water"
-                                        ? "bg-slate-900 text-white"
-                                        : "bg-slate-200 text-slate-700 hover:bg-slate-300"
-                                        }`}
-                                >
-                                    Water Management
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab("waste")}
-                                    className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-colors ${activeTab === "waste"
-                                        ? "bg-slate-900 text-white"
-                                        : "bg-slate-200 text-slate-700 hover:bg-slate-300"
-                                        }`}
-                                >
-                                    Waste Management
-                                </button>
-                            </div>
-
-                            <h2 className="text-3xl font-bold mb-6">Summary Index Score per County</h2>
-
+                            <h3 className="text-2xl font-bold mb-6">Summary Index Score</h3>
                             {loadingSummaryData ? (
-                                <div className="text-center py-8">Loading summary data...</div>
-                            ) : errorSummaryData ? (
+                            <div className="text-center py-8">Loading summary data...</div>
+                        ) : errorSummaryData ? (
                                 <div className="text-center py-8">
                                     <div className="text-red-500 mb-4">{errorSummaryData}</div>
                                     <div className="text-sm text-gray-600 mt-4">
@@ -265,8 +277,7 @@ export default function Home() {
                                     </div>
                                 </div>
                             )}
-
-
+                        
                             <div className="mt-6">
                                 <Link
                                     to={activeTab === "water" ? "/water-management" : "/waste-management"}
