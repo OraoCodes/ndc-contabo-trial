@@ -20,6 +20,20 @@ if [ "$(id -u)" = "0" ]; then
   exit 1
 fi
 
+echo "Copying environment file for build time..."
+# Copy .env.production to current directory BEFORE building
+# Vite needs these variables at build time to embed them in the bundle
+if [ -f "$ENV_FILE_SOURCE" ]; then
+  echo "Found $ENV_FILE_SOURCE, copying to .env.production for build"
+  cp "$ENV_FILE_SOURCE" ".env.production"
+  echo "Environment file copied successfully"
+else
+  echo "WARNING: $ENV_FILE_SOURCE not found!"
+  echo "Please create ~/env-files/.env.production with your Supabase credentials"
+  echo "Build will fail without environment variables."
+  exit 1
+fi
+
 echo "Installing dependencies (production) and building..."
 # Prefer pnpm if available, fall back to npm
 if command -v pnpm >/dev/null 2>&1; then
@@ -36,6 +50,10 @@ if command -v pnpm >/dev/null 2>&1; then
 else
   npm run build
 fi
+
+echo "Cleaning up environment file from build directory..."
+# Remove .env.production from repo directory after build for security
+rm -f ".env.production"
 
 echo "Ensuring $SPA_DST exists and copying built SPA files..."
 sudo mkdir -p "$SPA_DST"
@@ -79,24 +97,14 @@ fi
 
 sudo chown -R www-data:www-data "$WWW_DIR"
 
-echo "Copying environment file from secure location..."
-# Environment files are stored outside the git repo for security
-# They should be placed in ~/env-files/.env.production on the server
+echo "Copying environment file to deployment directory..."
+# Also copy to WWW_DIR for runtime (though Vite embeds vars at build time)
 if [ -f "$ENV_FILE_SOURCE" ]; then
-  echo "Found $ENV_FILE_SOURCE, copying to $WWW_DIR/.env.production"
+  echo "Copying $ENV_FILE_SOURCE to $WWW_DIR/.env.production"
   sudo cp "$ENV_FILE_SOURCE" "$WWW_DIR/.env.production"
   sudo chown www-data:www-data "$WWW_DIR/.env.production"
   sudo chmod 600 "$WWW_DIR/.env.production"
-  echo "Environment file copied successfully"
-else
-  echo "WARNING: $ENV_FILE_SOURCE not found!"
-  echo "Please create ~/env-files/.env.production with your Supabase credentials"
-  echo "Example:"
-  echo "  mkdir -p ~/env-files"
-  echo "  nano ~/env-files/.env.production"
-  echo "  # Add your VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, etc."
-  echo ""
-  echo "Deployment will continue but the app may not work without environment variables."
+  echo "Runtime environment file copied successfully"
 fi
 
 echo "Installing Apache site (if not present)..."
