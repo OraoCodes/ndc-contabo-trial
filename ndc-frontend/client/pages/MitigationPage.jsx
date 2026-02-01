@@ -4,6 +4,7 @@
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { HeroBanner } from "@/components/hero-banner"
+import { KenyaInteractiveMap } from "@/components/KenyaInteractiveMap"
 
 const mrvData = [
     { rank: 1, county: "Nairobi", water: 18, wasteMgt: 16, avgScore: 34, performance: "Outstanding" },
@@ -53,8 +54,8 @@ export default function Mitigation() {
             <section className="py-12 md:py-16 bg-slate-50">
                 <div className="max-w-7xl mx-auto px-4 md:px-6">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                        <div className="flex items-center justify-center">
-                            <img src="/image 9.svg" alt="MRV Visualization" className="w-full max-w-md" />
+                        <div className="flex flex-col items-center justify-center bg-white rounded-xl border border-gray-200 overflow-hidden">
+                            <KenyaInteractiveMap sector="water" />
                         </div>
 
                         <div>

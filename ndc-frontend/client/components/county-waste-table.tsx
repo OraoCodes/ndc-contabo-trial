@@ -19,11 +19,16 @@ interface CountyData {
     indexScore?: number
 }
 
+/** Column config from thematic areas (name + score key). When provided, table uses these for pillar columns. */
+export type ThematicColumn = { key: string; label: string }
+
 interface CountyRankingsTableProps {
     title: string
     data: CountyData[]
-    showDetailedColumns?: boolean // Note: this prop seems redundant with 'type', but kept for consistency
+    showDetailedColumns?: boolean
     type?: "basic" | "detailed"
+    /** When provided, pillar columns use these labels and keys from thematic areas. */
+    thematicColumns?: ThematicColumn[]
 }
 
 const performanceColors = {
@@ -34,8 +39,15 @@ const performanceColors = {
     Poor: "bg-red-500 text-white",
 }
 
-// Helper function to render a card view for detailed data on mobile
-const DetailedCardView = ({ data }: { data: CountyData[] }) => {
+const DEFAULT_PILLAR_COLUMNS: ThematicColumn[] = [
+    { key: 'governance', label: 'Gov' },
+    { key: 'mrv', label: 'MRV' },
+    { key: 'mitigation', label: 'Mit' },
+    { key: 'adaptation', label: 'Ada' },
+    { key: 'finance', label: 'Fin/Tech' },
+];
+
+const DetailedCardView = ({ data, pillarColumns }: { data: CountyData[]; pillarColumns: ThematicColumn[] }) => {
     return (
         <div className="md:hidden space-y-4">
             {data.map((row, idx) => (
@@ -52,16 +64,9 @@ const DetailedCardView = ({ data }: { data: CountyData[] }) => {
                     <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                         <DataItem label="Index Score" value={row.indexScore} isBold={true} />
                         <DataItem label="Average Score" value={row.avgScore} isBold={true} />
-
-                        {/* Detailed Indicators */}
-                        <DataItem label="Governance" value={row.governance} />
-                        <DataItem label="MRV" value={row.mrv} />
-                        <DataItem label="Mitigation" value={row.mitigation} />
-                        <DataItem label="Adaptation" value={row.adaptation} />
-                        <DataItem label="Finance & Tech" value={row.finance} />
-
-                        {/* Thematic Scores (if they exist) */}
-                        {/* {row.water !== undefined && <DataItem label="Water Score" value={row.water} />} */}
+                        {pillarColumns.map((col) => (
+                            <DataItem key={col.key} label={col.label} value={row[col.key as keyof CountyData] as number} />
+                        ))}
                         {row.wasteMgt !== undefined && <DataItem label="Waste Mgt Score" value={row.wasteMgt} />}
                     </div>
                 </div>
@@ -86,27 +91,23 @@ export function CountyWasteTable({
     data,
     showDetailedColumns = false,
     type = "basic",
+    thematicColumns,
 }: CountyRankingsTableProps) {
-    // Determine the columns based on the type
     const detailedMode = type === "detailed";
+    const pillarColumns = thematicColumns?.length ? thematicColumns : DEFAULT_PILLAR_COLUMNS;
 
-    // Define column headers dynamically for the table view
     const tableHeaders = [
-        { key: 'rank', label: 'Rank', align: 'left', mobile: true, alwaysShow: true },
-        { key: 'county', label: 'County', align: 'left', mobile: true, alwaysShow: true },
+        { key: 'rank', label: 'Rank', align: 'left' as const, mobile: true, alwaysShow: true },
+        { key: 'county', label: 'County', align: 'left' as const, mobile: true, alwaysShow: true },
         ...(detailedMode ? [
-            { key: 'governance', label: 'Gov', align: 'center' },
-            { key: 'mrv', label: 'MRV', align: 'center' },
-            { key: 'mitigation', label: 'Mit', align: 'center' },
-            { key: 'adaptation', label: 'Ada', align: 'center' },
-            { key: 'finance', label: 'Fin/Tech', align: 'center' },
-            { key: 'indexScore', label: 'Index Score', align: 'center', isBold: true, mobile: true },
+            ...pillarColumns.map((col) => ({ key: col.key, label: col.label, align: 'center' as const })),
+            { key: 'indexScore', label: 'Index Score', align: 'center' as const, isBold: true, mobile: true },
         ] : [
-            { key: 'water', label: 'Water', align: 'center' },
-            { key: 'wasteMgt', label: 'Waste Mgt', align: 'center' },
-            { key: 'avgScore', label: 'Avg Score', align: 'center', isBold: true },
+            { key: 'water', label: 'Water', align: 'center' as const },
+            { key: 'wasteMgt', label: 'Waste Mgt', align: 'center' as const },
+            { key: 'avgScore', label: 'Avg Score', align: 'center' as const, isBold: true },
         ]),
-        { key: 'performance', label: 'Performance', align: 'center', alwaysShow: true },
+        { key: 'performance', label: 'Performance', align: 'center' as const, alwaysShow: true },
     ];
 
 
@@ -130,18 +131,20 @@ export function CountyWasteTable({
             </div>
 
             {/* 1. Mobile Card View (Only for Detailed Data) */}
-            {detailedMode && <DetailedCardView data={data} />}
+            {detailedMode && <DetailedCardView data={data} pillarColumns={pillarColumns} />}
 
             {/* 2. Desktop Table View (Show on medium screens and up) */}
             {/* The overflow-x-auto is the key to responsive table scrolling */}
             <div className={`overflow-x-auto ${detailedMode ? 'hidden md:block' : 'block'}`}>
-                <table className="min-w-full text-sm border-collapse">
+                <table className="min-w-full text-sm border-collapse table-fixed">
                     <thead>
                         <tr className="border-b border-border bg-gray-50/50">
                             {tableHeaders.filter(h => h.alwaysShow || !detailedMode || h.key !== 'indexScore').map(header => (
                                 <th
                                     key={header.key}
-                                    className={`px-4 py-3 text-${header.align} font-semibold text-gray-600 whitespace-nowrap`}
+                                    className={`px-2 py-3 text-${header.align} font-semibold text-gray-600 align-middle ${
+                                        ['governance', 'mrv', 'mitigation', 'adaptation', 'finance'].includes(header.key) ? 'whitespace-nowrap min-w-[6.5rem]' : 'break-words'
+                                    }`}
                                 >
                                     {header.label}
                                 </th>
@@ -160,7 +163,9 @@ export function CountyWasteTable({
                                     return (
                                         <td
                                             key={header.key}
-                                            className={`px-4 py-3 text-${header.align} ${header.isBold ? 'font-bold' : ''} text-gray-800 whitespace-nowrap`}
+                                            className={`px-2 py-3 text-${header.align} ${header.isBold ? 'font-bold' : ''} text-gray-800 align-middle ${
+                                                ['governance', 'mrv', 'mitigation', 'adaptation', 'finance'].includes(header.key) ? 'whitespace-nowrap min-w-[6.5rem]' : 'break-words'
+                                            }`}
                                         >
                                             {header.key === 'county' ? (
                                                 <Link to={`/county/${row.county.toLowerCase().replace(/\s/g, '-')}`} className="underline text-blue-600 hover:text-blue-800">

@@ -3,7 +3,7 @@
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { HeroBanner } from "@/components/hero-banner"
-import { KenyaMap } from "@/components/kenya-map"
+import { KenyaInteractiveMap } from "@/components/KenyaInteractiveMap"
 
 const governanceData = [
     { rank: 1, county: "Nairobi", water: 15, wasteMgt: 11, avgScore: 21, performance: "Outstanding" },
@@ -59,8 +59,8 @@ export default function Governance() {
                 <div className="max-w-7xl mx-auto px-4 md:px-6">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
                         {/* Map */}
-                        <div className="flex flex-col items-center justify-center">
-                            <img src="/image 9.svg" alt="Background" />
+                        <div className="flex flex-col items-center justify-center bg-white rounded-xl border border-gray-200 overflow-hidden">
+                            <KenyaInteractiveMap sector="water" />
                         </div>
 
                         

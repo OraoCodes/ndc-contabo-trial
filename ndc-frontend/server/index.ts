@@ -27,9 +27,28 @@ export async function createServer() {
     const __dirname = import.meta.dirname;
     const distPath = path.join(__dirname, "../spa");
 
-    app.use(express.static(distPath));
+    app.use(
+      express.static(distPath, {
+        setHeaders(res, filePath) {
+          const relative = path.relative(distPath, filePath).replace(/\\/g, "/");
+          // index.html: never cache so users get fresh app after deploy
+          if (relative === "index.html") {
+            res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+            return;
+          }
+          // Hashed JS/CSS in assets/: safe to cache 1 year (Vite uses content hashes)
+          if (relative.startsWith("assets/")) {
+            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+            return;
+          }
+          // Other static (manifest, images, etc.): cache 1 week
+          res.setHeader("Cache-Control", "public, max-age=604800");
+        },
+      })
+    );
 
     app.get(/^(?!\/api\/).*$/, (req, res) => {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

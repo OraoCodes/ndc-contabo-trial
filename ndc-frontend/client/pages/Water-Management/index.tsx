@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { IndicatorSection } from "@/components/indicator-section"
+import { KenyaInteractiveMap } from "@/components/KenyaInteractiveMap"
 
 // Indicator type that matches what IndicatorSection expects
 interface IndicatorItem {
@@ -222,18 +223,12 @@ export default function CountyWaterPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
                     {/* LEFT: Map */}
                     <div className="lg:col-span-5">
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 sticky top-24">
-                            <img src="/image 9.svg" alt="Kenya Map" className="w-full h-auto" />
-                            <div className="mt-10 flex justify-center">
-                                <div className="flex flex-wrap justify-center gap-x-6 gap-y-3 text-xs text-gray-600 font-medium">
-                                    {["Least Developed", "Developing", "Moderate", "Good", "Most Developed"].map((label, i) => (
-                                        <div key={label} className="flex items-center gap-2">
-                                            <div className={`w-10 h-3 rounded-full ${i === 0 ? "bg-red-500" : i === 1 ? "bg-orange-400" : i === 2 ? "bg-yellow-400" : i === 3 ? "bg-lime-500" : "bg-green-600"}`} />
-                                            <span>{label}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden sticky top-24">
+                            <KenyaInteractiveMap
+                                sector="water"
+                                year={parseInt(year)}
+                                highlightedCounty={countyName ? decodeURIComponent(countyName).replace(/-/g, " ") : undefined}
+                            />
                         </div>
                     </div>
 

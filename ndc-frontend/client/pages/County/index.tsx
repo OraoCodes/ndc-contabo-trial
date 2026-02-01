@@ -7,7 +7,8 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { IndicatorSection } from "@/components/indicator-section"
 import { KenyaInteractiveMap } from "@/components/KenyaInteractiveMap"
-import { Loader2 } from "lucide-react"
+import { Loader2, ChevronDown, Info } from "lucide-react"
+import { Link } from "react-router-dom"
 import { listCounties, getCountyPerformance, listIndicators } from "@/lib/supabase-api"
 import { supabase } from "@/lib/supabase"
 
@@ -99,6 +100,8 @@ const WASTE_INDICATORS = {
   ],
 } as const
 
+const YEAR_OPTIONS = Array.from({ length: 11 }, (_, i) => 2025 + i) // 2025 to 2035
+
 export default function CountyPage() {
   const { countyName = "" } = useParams<{ countyName: string }>()
   const [data, setData] = useState<any>(null)
@@ -106,55 +109,49 @@ export default function CountyPage() {
   const [error, setError] = useState<string | null>(null)
   const [nationalRank, setNationalRank] = useState<number | null>(null)
   const [activeSector, setActiveSector] = useState<"water" | "waste">("water")
+  const [selectedYear, setSelectedYear] = useState<number>(2025)
 
-  // Map flat indicator array → official grouped structure with real scores
+  // Map indicators_json (object keyed by indicator id) → official grouped structure with real scores
   const mapIndicators = (rawIndicators: any, officialGroups: typeof WATER_INDICATORS | typeof WASTE_INDICATORS, indicatorDefinitions: any[] = []) => {
-    // Handle both array and object formats
-    let indicatorsArray: any[] = [];
-    if (Array.isArray(rawIndicators)) {
-      indicatorsArray = rawIndicators;
-    } else if (rawIndicators && typeof rawIndicators === 'object') {
-      // Convert object format { indicatorId: { response, comment, score } } to array
-      // Match indicator IDs with actual indicator definitions
-      indicatorsArray = Object.entries(rawIndicators).map(([id, data]: [string, any]) => {
-        const indicatorDef = indicatorDefinitions.find(ind => ind.id.toString() === id);
-        return {
-          id,
-          indicator: indicatorDef?.indicator_text || data.indicator || id,
-          description: data.comment || data.description || "",
-          score: data.score || 0,
-          response: data.response || ""
-        };
-      });
+    const raw = rawIndicators && typeof rawIndicators === 'object' && !Array.isArray(rawIndicators) ? rawIndicators as Record<string, { response?: string; comment?: string; score?: string | number }> : {}
+
+    const groupKeys = ['governance', 'mrv', 'mitigation', 'adaptation', 'finance'] as const
+    const thematicKey = (name: string) => {
+      const n = (name || '').toLowerCase()
+      if (n.includes('governance')) return 'governance'
+      if (n.includes('mrv')) return 'mrv'
+      if (n.includes('mitigation')) return 'mitigation'
+      if (n.includes('adaptation')) return 'adaptation'
+      if (n.includes('finance')) return 'finance'
+      return null
     }
-    
-    const scoreMap = new Map(indicatorsArray.map(i => [i.indicator?.toLowerCase() || String(i.id || "").toLowerCase(), i]))
 
-    const buildCategory = (officialList: readonly string[]) => {
+    const buildCategory = (officialList: readonly string[], key: typeof groupKeys[number]) => {
+      const defs = indicatorDefinitions
+        .filter(ind => thematicKey(ind.thematic_area) === key)
+        .sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
       return officialList.map((officialText, i) => {
-        // Find best match by substring (very reliable)
-        const match = Array.from(scoreMap.entries()).find(([key]) =>
-          key.includes(officialText.toLowerCase().slice(0, 30)) ||
-          officialText.toLowerCase().includes(key.slice(0, 30))
-        )
-
-        const realItem = match ? match[1] : null
-
+        const def = defs[i]
+        const saved = def ? raw[String(def.id)] : null
+        const scoreVal = saved?.score !== undefined && saved?.score !== null && saved?.score !== ''
+          ? Number(saved.score)
+          : 0
+        const description = saved?.comment ?? saved?.description ?? (scoreVal > 0 ? 'Data recorded' : 'Data not yet entered.')
         return {
           no: i + 1,
           indicator: officialText,
-          description: realItem ? (realItem.description || realItem.comment || "Data recorded") : "Data not yet entered.",
-          score: realItem ? Math.round(Number(realItem.score || 0)) : 0,
+          description,
+          score: Number.isFinite(scoreVal) ? scoreVal : 0,
         }
       })
     }
 
     return {
-      governance: buildCategory(officialGroups.governance),
-      mrv: buildCategory(officialGroups.mrv),
-      mitigation: buildCategory(officialGroups.mitigation),
-      adaptation: buildCategory(officialGroups.adaptation),
-      finance: buildCategory(officialGroups.finance),
+      governance: buildCategory(officialGroups.governance, 'governance'),
+      mrv: buildCategory(officialGroups.mrv, 'mrv'),
+      mitigation: buildCategory(officialGroups.mitigation, 'mitigation'),
+      adaptation: buildCategory(officialGroups.adaptation, 'adaptation'),
+      finance: buildCategory(officialGroups.finance, 'finance'),
     }
   }
 
@@ -173,15 +170,13 @@ export default function CountyPage() {
         const county = counties.find((c: any) => c.name.toLowerCase() === urlName.toLowerCase())
         if (!county) throw new Error(`County "${urlName}" not found in database`)
 
-        // 2. Fetch indicator definitions and performance data
-        const year = 2025
+        // 2. Fetch indicator definitions and performance data for selected year
         const [indicators, perf] = await Promise.all([
           listIndicators(),
-          getCountyPerformance(county.name, year)
+          getCountyPerformance(county.name, selectedYear)
         ])
 
-        // 3. Calculate national rank based on overall_score
-        // Fetch all county performance data for the year
+        // 3. Calculate national rank based on overall_score for selected year
         const { data: allPerformance, error: rankError } = await supabase
           .from('county_performance')
           .select(`
@@ -190,7 +185,7 @@ export default function CountyPage() {
             overall_score,
             counties(name)
           `)
-          .eq('year', year)
+          .eq('year', selectedYear)
 
         if (!rankError && allPerformance) {
           // Get unique counties with their overall_score (both water and waste should have same overall_score)
@@ -242,6 +237,9 @@ export default function CountyPage() {
         const water = mapIndicators(waterIndicators, WATER_INDICATORS, indicators.filter(i => i.sector === 'water'))
         const waste = mapIndicators(wasteIndicators, WASTE_INDICATORS, indicators.filter(i => i.sector === 'waste'))
 
+        const hasWaterIndicatorData = waterIndicators && typeof waterIndicators === 'object' && !Array.isArray(waterIndicators) && Object.keys(waterIndicators).length > 0
+        const hasWasteIndicatorData = wasteIndicators && typeof wasteIndicators === 'object' && !Array.isArray(wasteIndicators) && Object.keys(wasteIndicators).length > 0
+
         setData({
           name: perf.county || county.name,
           overallScore: Number(perf.overallScore || 0).toFixed(1),
@@ -256,6 +254,8 @@ export default function CountyPage() {
           },
           water,
           waste,
+          hasWaterIndicatorData: !!hasWaterIndicatorData,
+          hasWasteIndicatorData: !!hasWasteIndicatorData,
         })
       } catch (err: any) {
         console.error("Load failed:", err)
@@ -266,7 +266,7 @@ export default function CountyPage() {
     }
 
     loadCounty()
-  }, [countyName])
+  }, [countyName, selectedYear])
 
   // Loading & Error States
   if (loading) {
@@ -308,7 +308,28 @@ export default function CountyPage() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-12">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
+        {/* Year dropdown */}
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+          <span className="text-gray-600 font-medium">View data by year:</span>
+          <div className="relative">
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="appearance-none pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {YEAR_OPTIONS.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 md:px-6 pb-12">
         {/* Score Summary */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
           <div className="lg:col-span-5">
@@ -340,7 +361,7 @@ export default function CountyPage() {
               {/* Map without background */}
               <KenyaInteractiveMap
                 sector={activeSector}
-                year={2025}
+                year={selectedYear}
                 highlightedCounty={data.name}
               />
             </div>
@@ -416,6 +437,20 @@ export default function CountyPage() {
 
         {/* Detailed Indicators */}
         <div className="mt-20 space-y-20">
+          {(!data.hasWaterIndicatorData || !data.hasWasteIndicatorData) && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+              <Info className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-800">
+                {!data.hasWaterIndicatorData && !data.hasWasteIndicatorData ? (
+                  <>No indicator data recorded for <strong>{data.name}</strong> for year <strong>{selectedYear}</strong>. Scores and descriptions are entered in <Link to="/county-data" className="font-medium underline hover:no-underline">County Data</Link> (Dashboard). Add the county and year there, fill Water and Waste sections, and Save.</>
+                ) : !data.hasWaterIndicatorData ? (
+                  <>No water indicator data for this county and year. Add it in <Link to="/county-data" className="font-medium underline hover:no-underline">County Data</Link>.</>
+                ) : (
+                  <>No waste indicator data for this county and year. Add it in <Link to="/county-data" className="font-medium underline hover:no-underline">County Data</Link>.</>
+                )}
+              </div>
+            </div>
+          )}
           <div>
             <h2 className="text-3xl font-bold text-gray-900 mb-10">Water Management Indicators</h2>
             <IndicatorSection title="Governance" indicators={data.water.governance} defaultOpen={true} />

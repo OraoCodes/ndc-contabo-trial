@@ -11,6 +11,7 @@ import CountiesList from "./pages/CountiesList";
 import CountyData from "./pages/CountyData";
 import ThematicAreas from "./pages/ThematicAreas";
 import AddThematicArea from "./pages/AddThematicArea";
+import EditThematicArea from "./pages/EditThematicArea";
 import PublicPortal from "./pages/PublicPortal";
 import Publications from "./pages/Publications";
 import NotFound from "./pages/NotFound";
@@ -32,6 +33,7 @@ import CountyScoringPage from "./pages/IndicatorPage";
 import CountyWaterPage from "./pages/Water-Management";
 import CountyWastePage from "./pages/Waste-Management";
 import AboutToolPage from "./pages/AboutToolPage";
+import TermsPage from "./pages/TermsPage";
 
 const queryClient = new QueryClient();
 
@@ -59,23 +61,20 @@ export const App = () => (
             <Route path="/mitigation" element={<Mitigation />} />
             <Route path="/adaptation" element={<Adaptation />} />
             <Route path="/finance-technology-transfer" element={<FinanceTechnologyTransfer />} />
-            <Route path="/dashboard" element={<Index />} />
-            <Route path="/counties-list" element={<CountiesList />} />
-            <Route path="/county-data" element={<CountyData />} />
-            <Route path="/indicators" element={<CountyScoringPage />} />
-            <Route path="/publications" element={<Publications />} />
             <Route path="/about-the-tool" element={<AboutToolPage />} />
-            <Route path="/thematic-areas" element={<ThematicAreas />} />
-            <Route path="/thematic-areas/add" element={<AddThematicArea />} />
+            <Route path="/terms" element={<TermsPage />} />
 
-            {/* Protected Routes */}
+            {/* Protected Routes – require sign-in */}
             <Route element={<PrivateRoute />}>
+              <Route path="/dashboard" element={<Index />} />
               <Route path="/counties" element={<Counties />} />
-
-
-
-
-
+              <Route path="/counties-list" element={<CountiesList />} />
+              <Route path="/county-data" element={<CountyData />} />
+              <Route path="/indicators" element={<CountyScoringPage />} />
+              <Route path="/publications" element={<Publications />} />
+              <Route path="/thematic-areas" element={<ThematicAreas />} />
+              <Route path="/thematic-areas/add" element={<AddThematicArea />} />
+              <Route path="/thematic-areas/edit/:id" element={<EditThematicArea />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

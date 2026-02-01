@@ -8,7 +8,7 @@ import { KenyaInteractiveMap } from "@/components/KenyaInteractiveMap"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Link, useNavigate } from "react-router-dom"
-import { listThematicAreas, listPublications, getCountySummaryPerformance, type ThematicArea, type CountySummaryPerformance } from "@/lib/supabase-api"
+import { listThematicAreas, listPublications, getCountySummaryPerformance, thematicAreasToMenuItems, type ThematicArea, type CountySummaryPerformance } from "@/lib/supabase-api"
 
 // Publication interface matching database schema
 interface Publication {
@@ -304,10 +304,10 @@ export default function Home() {
                             <div className="text-red-500">{errorThematicAreas}</div>
                         ) : (
                             <div className="space-y-6">
-                                {thematicAreas.map((area) => (
+                                {thematicAreasToMenuItems(thematicAreas).map((item) => (
                                     <Link
-                                        key={area.id}
-                                        to={`/${area.name}`} // Assuming a thematic area detail page exists
+                                        key={item.path}
+                                        to={item.path}
                                         className="block group"
                                     >
                                         <div className="flex items-center justify-between px-8 py-6 bg-white border border-gray-200 rounded-2xl 
@@ -315,7 +315,7 @@ export default function Home() {
                                           cursor-pointer"
                                         >
                                             <span className="text-lg font-medium text-gray-800 pr-4">
-                                                {area.name}
+                                                {item.name}
                                             </span>
                                             <span className="text-2xl text-gray-400 group-hover:text-blue-600 
                                              group-hover:translate-x-3 transition-all duration-300">

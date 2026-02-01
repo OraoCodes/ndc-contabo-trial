@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation, useNavigate } from "react-router-dom";
 
 export default function CountyData() {
+  const yearOptions = Array.from({ length: 11 }, (_, i) => 2025 + i); // 2025 to 2035
   const [county, setCounty] = useState("");
   const [year, setYear] = useState("2025");
   const [waterData, setWaterData] = useState({}); // { indicatorId: { response: "", comment: "" } }
@@ -534,7 +535,7 @@ export default function CountyData() {
               onChange={(e) => setYear(e.target.value)} 
               className="w-full px-4 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              {[2025, 2024, 2023, 2022, 2021].map(y => (
+              {yearOptions.map(y => (
                 <option key={y} value={y}>{y}</option>
               ))}
             </select>

@@ -5,16 +5,7 @@ import React, { useState, useEffect } from 'react'
 import { Link } from "react-router-dom"
 import { Search, Menu, X, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import { listCounties } from "@/lib/supabase-api"
-
-// Static thematic areas (these don't change)
-const thematicAreasItems = [
-  { name: 'Governance', path: '/governance' },
-  { name: 'MRV', path: '/mrv' },
-  { name: 'Mitigation', path: '/mitigation' },
-  { name: 'Adaptation', path: '/adaptation' },
-  { name: 'Finance & Technology Transfer', path: '/finance-technology-transfer' },
-]
+import { listCounties, listThematicAreas, thematicAreasToMenuItems } from "@/lib/supabase-api"
 
 interface County {
   id: number
@@ -24,7 +15,9 @@ interface County {
 export function Header({ currentPage }: { currentPage?: string }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [counties, setCounties] = useState<County[]>([])
+  const [thematicAreasItems, setThematicAreasItems] = useState<{ name: string; path: string }[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingThematic, setLoadingThematic] = useState(true)
 
   useEffect(() => {
     listCounties()
@@ -39,10 +32,33 @@ export function Header({ currentPage }: { currentPage?: string }) {
       .finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => {
+    listThematicAreas()
+      .then(data => setThematicAreasItems(thematicAreasToMenuItems(data)))
+      .catch(err => {
+        console.error("Failed to load thematic areas:", err)
+        setThematicAreasItems([])
+      })
+      .finally(() => setLoadingThematic(false))
+  }, [])
+
   const countiesItems = counties.map(county => ({
     name: county.name,
     path: `/county/${county.name.toLowerCase().replace(/\s+/g, '-')}`
   }))
+
+  const thematicSections = [
+    {
+      items: [
+        { name: 'Water Management', path: '/water-management' },
+        { name: 'Waste Management', path: '/waste-management' },
+      ],
+    },
+    {
+      label: 'Thematic areas',
+      items: thematicAreasItems,
+    },
+  ]
 
   return (
     <>
@@ -67,7 +83,14 @@ export function Header({ currentPage }: { currentPage?: string }) {
 
           <nav className="hidden lg:flex items-center gap-6 text-sm font-medium">
             <Link to="/" className={`hover:text-blue-600 ${currentPage === "home" ? "text-blue-600 font-bold" : "text-gray-700"}`}>HOME</Link>
-            <Dropdown title="THEMATIC AREAS" items={thematicAreasItems} currentPage={currentPage} />
+            {loadingThematic ? (
+              <div className="flex items-center gap-2 text-gray-500">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-xs">Thematic areas...</span>
+              </div>
+            ) : (
+              <Dropdown title="THEMATIC AREAS" sections={thematicSections} currentPage={currentPage} />
+            )}
             
             {loading ? (
               <div className="flex items-center gap-2 text-gray-500">
@@ -78,8 +101,6 @@ export function Header({ currentPage }: { currentPage?: string }) {
               <Dropdown title="COUNTIES" items={countiesItems} currentPage={currentPage} />
             )}
 
-            <Link to="/water-management" className={`hover:text-blue-600 ${currentPage === "water" ? "text-blue-600 font-bold" : "text-gray-700"}`}>WATER MANAGEMENT</Link>
-            <Link to="/waste-management" className={`hover:text-blue-600 ${currentPage === "waste" ? "text-blue-600 font-bold" : "text-gray-700"}`}>WASTE MANAGEMENT</Link>
             <Link to="/about-the-tool" className={`hover:text-blue-600 ${currentPage === "about" ? "text-blue-600 font-bold" : "text-gray-700"}`}>ABOUT THE TOOL</Link>
           </nav>
 
@@ -100,7 +121,14 @@ export function Header({ currentPage }: { currentPage?: string }) {
               </div>
               <nav className="space-y-4 text-lg font-medium">
                 <Link to="/" onClick={() => setMobileMenuOpen(false)} className="block">Home</Link>
-                <MobileDropdown title="Thematic Areas" items={thematicAreasItems} onClose={() => setMobileMenuOpen(false)} />
+                {loadingThematic ? (
+                  <div className="flex items-center gap-2 text-gray-500 py-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Thematic areas...</span>
+                  </div>
+                ) : (
+                  <MobileDropdown title="Thematic Areas" sections={thematicSections} onClose={() => setMobileMenuOpen(false)} />
+                )}
                 
                 {loading ? (
                   <div className="py-4 text-center text-gray-500">
@@ -111,8 +139,6 @@ export function Header({ currentPage }: { currentPage?: string }) {
                   <MobileDropdown title="Counties" items={countiesItems} onClose={() => setMobileMenuOpen(false)} />
                 )}
 
-                <Link to="/water-management" onClick={() => setMobileMenuOpen(false)} className="block">Water Management</Link>
-                <Link to="/waste-management" onClick={() => setMobileMenuOpen(false)} className="block">Waste Management</Link>
                 <Link to="/about-the-tool" onClick={() => setMobileMenuOpen(false)} className="block">About the Tool</Link>
               </nav>
             </div>
@@ -123,9 +149,24 @@ export function Header({ currentPage }: { currentPage?: string }) {
   )
 }
 
-// Desktop Dropdown
-function Dropdown({ title, items, currentPage }: { title: string; items: { name: string; path: string }[]; currentPage?: string }) {
-  const isActive = items.some(i => currentPage?.includes(i.path.split('/')[1]))
+type MenuItem = { name: string; path: string }
+type MenuSection = { label?: string; items: MenuItem[] }
+
+// Desktop Dropdown: accepts either flat items (COUNTIES) or sections (THEMATIC AREAS)
+function Dropdown({
+  title,
+  items,
+  sections,
+  currentPage,
+}: {
+  title: string
+  items?: MenuItem[]
+  sections?: MenuSection[]
+  currentPage?: string
+}) {
+  const resolvedSections: MenuSection[] = sections ?? (items?.length ? [{ items }] : [])
+  const allItems = resolvedSections.flatMap(s => s.items)
+  const isActive = allItems.some(i => currentPage?.includes(i.path.split('/')[1]))
   return (
     <div className="relative group">
       <button className={`flex items-center gap-1 hover:text-blue-600 ${isActive ? "text-blue-600 font-bold" : "text-gray-700"}`}>
@@ -135,19 +176,40 @@ function Dropdown({ title, items, currentPage }: { title: string; items: { name:
         </svg>
       </button>
       <div className="absolute left-1/2 top-full -translate-x-1/2 mt-3 w-56 bg-white rounded-lg shadow-xl border border-gray-100 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[9999]">
-        {items.map(item => (
-          <Link key={item.path} to={item.path} className="block px-5 py-3 text-sm hover:bg-blue-50 hover:text-blue-600">
-            {item.name}
-          </Link>
+        {resolvedSections.map((section, idx) => (
+          <div key={idx}>
+            {idx > 0 && <div className="my-2 border-t border-gray-100" />}
+            {section.label && (
+              <div className="px-5 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                {section.label}
+              </div>
+            )}
+            {section.items.map(item => (
+              <Link key={item.path} to={item.path} className="block px-5 py-3 text-sm hover:bg-blue-50 hover:text-blue-600">
+                {item.name}
+              </Link>
+            ))}
+          </div>
         ))}
       </div>
     </div>
   )
 }
 
-// Mobile Dropdown
-function MobileDropdown({ title, items, onClose }: { title: string; items: { name: string; path: string }[]; onClose: () => void }) {
+// Mobile Dropdown: accepts either flat items (Counties) or sections (Thematic Areas)
+function MobileDropdown({
+  title,
+  items,
+  sections,
+  onClose,
+}: {
+  title: string
+  items?: MenuItem[]
+  sections?: MenuSection[]
+  onClose: () => void
+}) {
   const [open, setOpen] = useState(false)
+  const resolvedSections: MenuSection[] = sections ?? (items?.length ? [{ items }] : [])
   return (
     <div className="border-b border-gray-100 pb-4">
       <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between text-left">
@@ -157,11 +219,23 @@ function MobileDropdown({ title, items, onClose }: { title: string; items: { nam
         </svg>
       </button>
       {open && (
-        <div className="mt-3 ml-4 space-y-2">
-          {items.map(item => (
-            <Link key={item.path} to={item.path} onClick={onClose} className="block py-2 text-gray-700 hover:text-blue-600">
-              {item.name}
-            </Link>
+        <div className="mt-3 ml-4 space-y-4">
+          {resolvedSections.map((section, idx) => (
+            <div key={idx}>
+              {idx > 0 && <div className="border-t border-gray-100 pt-3 mt-3" />}
+              {section.label && (
+                <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">
+                  {section.label}
+                </div>
+              )}
+              <div className="space-y-2">
+                {section.items.map(item => (
+                  <Link key={item.path} to={item.path} onClick={onClose} className="block py-2 text-gray-700 hover:text-blue-600">
+                    {item.name}
+                  </Link>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}

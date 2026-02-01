@@ -135,13 +135,15 @@ export function CountyRankingsTable({
             {/* 2. Desktop Table View (Show on medium screens and up) */}
             {/* The overflow-x-auto is the key to responsive table scrolling */}
             <div className={`overflow-x-auto ${detailedMode ? 'hidden md:block' : 'block'}`}>
-                <table className="min-w-full text-sm border-collapse">
+                <table className="min-w-full text-sm border-collapse table-fixed">
                     <thead>
                         <tr className="border-b border-border bg-gray-50/50">
                             {tableHeaders.filter(h => h.alwaysShow || !detailedMode || h.key !== 'indexScore').map(header => (
                                 <th
                                     key={header.key}
-                                    className={`px-4 py-3 text-${header.align} font-semibold text-gray-600 whitespace-nowrap`}
+                                    className={`px-2 py-3 text-${header.align} font-semibold text-gray-600 align-middle ${
+                                        ['governance', 'mrv', 'mitigation', 'adaptation', 'finance'].includes(header.key) ? 'whitespace-nowrap min-w-[6.5rem]' : 'break-words'
+                                    }`}
                                 >
                                     {header.label}
                                 </th>
@@ -160,7 +162,9 @@ export function CountyRankingsTable({
                                     return (
                                         <td
                                             key={header.key}
-                                            className={`px-4 py-3 text-${header.align} ${header.isBold ? 'font-bold' : ''} text-gray-800 whitespace-nowrap`}
+                                            className={`px-2 py-3 text-${header.align} ${header.isBold ? 'font-bold' : ''} text-gray-800 align-middle ${
+                                                ['governance', 'mrv', 'mitigation', 'adaptation', 'finance'].includes(header.key) ? 'whitespace-nowrap min-w-[6.5rem]' : 'break-words'
+                                            }`}
                                         >
                                             {header.key === 'county' ? (
                                                 <Link to={`/county/${row.county.toLowerCase().replace(/\s/g, '-')}`} className="underline text-blue-600 hover:text-blue-800">

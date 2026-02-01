@@ -71,24 +71,26 @@ export default function CountiesList() {
                     <td className="py-5 px-6 text-foreground">{county.population?.toLocaleString() || "-"}</td>
                     <td className="py-5 px-6 text-foreground">{county.thematic_area_id ?? "-"}</td>
                     <td className="py-5 px-6">
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
                         <button
+                          type="button"
                           onClick={() => navigate("/county-data", { state: { countyId: county.id } })}
-                          className="text-primary hover:text-primary/80 font-medium flex items-center gap-1 transition"
+                          title="Edit"
+                          className="p-2 text-primary hover:text-primary/80 hover:bg-primary/10 rounded-lg transition-colors"
                         >
-                          <Edit size={16} />
-                          Edit
+                          <Edit size={18} />
                         </button>
                         <button
+                          type="button"
                           onClick={() => {
                             if (confirm(`Delete "${county.name}" permanently?`)) {
                               deleteMutation.mutate(Number(county.id));
                             }
                           }}
-                          className="text-destructive hover:text-destructive/80 font-medium flex items-center gap-1 transition"
+                          title="Delete"
+                          className="p-2 text-destructive hover:text-destructive/80 hover:bg-destructive/10 rounded-lg transition-colors"
                         >
-                          <Trash2 size={16} />
-                          Delete
+                          <Trash2 size={18} />
                         </button>
                       </div>
                     </td>
@@ -120,18 +122,22 @@ export default function CountiesList() {
                   <h3 className="font-bold text-lg text-foreground">{county.name}</h3>
                   <div className="flex gap-3">
                     <button
+                      type="button"
                       onClick={() => navigate("/county-data", { state: { countyId: county.id } })}
-                      className="text-primary hover:text-primary/80"
+                      title="Edit"
+                      className="p-2 text-primary hover:text-primary/80 hover:bg-primary/10 rounded-lg transition-colors"
                     >
                       <Edit size={20} />
                     </button>
                     <button
+                      type="button"
                       onClick={() => {
                         if (confirm(`Delete "${county.name}"?`)) {
                           deleteMutation.mutate(Number(county.id));
                         }
                       }}
-                      className="text-destructive hover:text-destructive/80"
+                      title="Delete"
+                      className="p-2 text-destructive hover:text-destructive/80 hover:bg-destructive/10 rounded-lg transition-colors"
                     >
                       <Trash2 size={20} />
                     </button>

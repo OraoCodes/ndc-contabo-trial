@@ -98,8 +98,84 @@ export interface ThematicArea {
   id: number;
   name: string;
   description?: string | null;
+  sector?: 'water' | 'waste' | string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+/** Maps thematic area name from DB to route path and display name for menu/homepage. */
+const THEMATIC_NAME_TO_ROUTE: { path: string; displayName: string }[] = [
+  { path: '/governance', displayName: 'Governance' },
+  { path: '/mrv', displayName: 'MRV' },
+  { path: '/mitigation', displayName: 'Mitigation' },
+  { path: '/adaptation', displayName: 'Adaptation' },
+  { path: '/finance-technology-transfer', displayName: 'Finance & Technology Transfer' },
+];
+
+function thematicNameToRoute(name: string): { path: string; displayName: string } | null {
+  const n = name.toLowerCase();
+  if (n.includes('governance')) return THEMATIC_NAME_TO_ROUTE[0];
+  if (n.includes('mrv') || n === 'mrv') return THEMATIC_NAME_TO_ROUTE[1];
+  if (n.includes('mitigation')) return THEMATIC_NAME_TO_ROUTE[2];
+  if (n.includes('adaptation')) return THEMATIC_NAME_TO_ROUTE[3];
+  if (n.includes('finance') || n.includes('climate finance')) return THEMATIC_NAME_TO_ROUTE[4];
+  return null;
+}
+
+/** Map thematic area name from DB to county_performance score column key. */
+export function thematicAreaNameToScoreKey(name: string): 'governance' | 'mrv' | 'mitigation' | 'adaptation' | 'finance' | null {
+  const n = name.toLowerCase();
+  if (n.includes('governance')) return 'governance';
+  if (n.includes('mrv') || n === 'mrv') return 'mrv';
+  if (n.includes('mitigation')) return 'mitigation';
+  if (n.includes('adaptation')) return 'adaptation';
+  if (n.includes('finance') || n.includes('climate finance')) return 'finance';
+  return null;
+}
+
+/** Ordered score keys for consistent column order. */
+const SCORE_KEY_ORDER: ('governance' | 'mrv' | 'mitigation' | 'adaptation' | 'finance')[] = ['governance', 'mrv', 'mitigation', 'adaptation', 'finance'];
+
+/** Short labels for table column headers (no wrapping). */
+const SCORE_KEY_SHORT_LABELS: Record<string, string> = {
+  governance: 'Governance',
+  mrv: 'MRV',
+  mitigation: 'Mitigation',
+  adaptation: 'Adaptation',
+  finance: 'Finance',
+};
+
+/** Build table column config from thematic areas for a sector (water/waste). Uses short labels so columns fit. */
+export function getThematicColumnsForSector(areas: ThematicArea[], sector: 'water' | 'waste'): { key: string; label: string }[] {
+  const forSector = areas.filter((a) => (a.sector || '').toLowerCase() === sector);
+  const seen = new Set<string>();
+  const result: { key: string; label: string }[] = [];
+  for (const key of SCORE_KEY_ORDER) {
+    const area = forSector.find((a) => thematicAreaNameToScoreKey(a.name) === key);
+    if (area && !seen.has(key)) {
+      seen.add(key);
+      result.push({ key, label: SCORE_KEY_SHORT_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1) });
+    }
+  }
+  if (result.length === 0) {
+    return SCORE_KEY_ORDER.map((key) => ({
+      key,
+      label: SCORE_KEY_SHORT_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1),
+    }));
+  }
+  return result;
+}
+
+/** Convert thematic areas from API to unique menu items (path + display name) in fixed order. */
+export function thematicAreasToMenuItems(areas: { name: string }[]): { name: string; path: string }[] {
+  const byPath = new Map<string, string>();
+  for (const area of areas) {
+    const route = thematicNameToRoute(area.name);
+    if (route && !byPath.has(route.path)) byPath.set(route.path, route.displayName);
+  }
+  return THEMATIC_NAME_TO_ROUTE
+    .filter((r) => byPath.has(r.path))
+    .map((r) => ({ name: r.displayName, path: r.path }));
 }
 
 export async function listThematicAreas(): Promise<ThematicArea[]> {
@@ -133,6 +209,24 @@ export async function createThematicArea(payload: { name: string; description?: 
       name: payload.name,
       description: payload.description || null,
     })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateThematicArea(
+  id: number,
+  payload: { name?: string; description?: string | null }
+): Promise<ThematicArea> {
+  const { data, error } = await supabase
+    .from('thematic_areas')
+    .update({
+      ...(payload.name !== undefined && { name: payload.name }),
+      ...(payload.description !== undefined && { description: payload.description || null }),
+    })
+    .eq('id', id)
     .select()
     .single();
 

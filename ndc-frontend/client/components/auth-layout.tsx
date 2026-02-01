@@ -1,11 +1,11 @@
 import type React from "react"
 
 const partners = [
+    "/EU.png",
     "/PACJA.png",
     "/Friedrich.png",
     "/Civil Society.png",
-    "/SCEJU.png",
-    "/EU.png"
+    "/SCEJU.png"
 ];
 
 export function AuthLayout({

@@ -27,10 +27,31 @@ function expressPlugin(): Plugin {
   }
 }
 
+/** Prevents 404 from cached PWA service workers / extensions that request this path. */
+function stubPwaPlugin(): Plugin {
+  return {
+    name: "stub-pwa-entry",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url === "/@vite-plugin-pwa/pwa-entry-point-loaded" || req.url?.startsWith("/@vite-plugin-pwa/")) {
+          res.setHeader("Content-Type", "application/javascript")
+          res.statusCode = 200
+          res.end("/* PWA plugin not used */")
+          return
+        }
+        next()
+      })
+    },
+  }
+}
+
 export default defineConfig({
   server: {
     host: "::",
     port: 8080,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
   },
 
   // THIS IS THE FIX FOR DEPLOYMENT
@@ -39,7 +60,7 @@ export default defineConfig({
     emptyOutDir: true,       // Clean the folder on each build
   },
 
-  plugins: [react(), expressPlugin()],
+  plugins: [stubPwaPlugin(), react(), expressPlugin()],
 
   resolve: {
     alias: {

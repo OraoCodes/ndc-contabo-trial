@@ -185,7 +185,7 @@ export default function RegisterPage() {
             className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
           />
           <label className="text-sm text-gray-700">
-            I agree to the <a href="#" className="underline hover:text-blue-600">Terms & Conditions</a>
+            I agree to the <Link to="/terms" className="underline hover:text-blue-600">Terms & Conditions</Link>
           </label>
         </div>
 

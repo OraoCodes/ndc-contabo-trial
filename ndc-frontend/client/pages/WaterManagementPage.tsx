@@ -5,11 +5,11 @@ import { useState, useEffect } from "react"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { HeroBanner } from "@/components/hero-banner"
-import { KenyaMap } from "@/components/kenya-map"
+import { KenyaInteractiveMap } from "@/components/KenyaInteractiveMap"
 import { CountyWaterTable } from "@/components/county-water-table"
 import { RegionalAnalysisChart } from "@/components/regional-analysis-chart"
 import { Loader2 } from "lucide-react"
-import { getCountySummaryPerformance, type CountySummaryPerformance } from "@/lib/supabase-api"
+import { getCountySummaryPerformance, listThematicAreas, getThematicColumnsForSector, type CountySummaryPerformance } from "@/lib/supabase-api"
 
 interface RankedCounty extends CountySummaryPerformance {
   rank: number
@@ -20,8 +20,15 @@ interface RankedCounty extends CountySummaryPerformance {
 
 export default function WaterManagement() {
   const [waterData, setWaterData] = useState<RankedCounty[]>([])
+  const [thematicColumns, setThematicColumns] = useState<{ key: string; label: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    listThematicAreas()
+      .then((areas) => setThematicColumns(getThematicColumnsForSector(areas, "water")))
+      .catch(() => setThematicColumns([]))
+  }, [])
 
   useEffect(() => {
     const fetchWaterScores = async () => {
@@ -107,8 +114,8 @@ export default function WaterManagement() {
         <div className="max-w-7xl mx-auto px-4 md:px-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Map */}
-            <div className="flex flex-col items-center justify-center">
-              <img src="/image 9.svg" alt="Background" />
+            <div className="flex flex-col items-center justify-center bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <KenyaInteractiveMap sector="water" />
             </div>
 
             {/* Regional Analysis */}
@@ -151,7 +158,7 @@ export default function WaterManagement() {
           )}
 
           {!loading && !error && waterData.length > 0 && (
-            <CountyWaterTable title="Index Score per County" data={waterData} type="detailed" />
+            <CountyWaterTable title="Index Score per County" data={waterData} type="detailed" thematicColumns={thematicColumns} />
           )}
         </div>
       </section>

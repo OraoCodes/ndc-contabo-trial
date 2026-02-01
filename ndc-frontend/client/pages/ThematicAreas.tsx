@@ -1,5 +1,5 @@
 import { MainLayout } from "@/components/MainLayout";
-import { Plus } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listThematicAreas, deleteThematicArea, type ThematicArea } from "@/lib/supabase-api";
@@ -71,22 +71,26 @@ export default function ThematicAreas() {
                     <td className="py-4 px-6 text-foreground text-sm font-medium">{row.name}</td>
                     <td className="py-4 px-6 text-foreground text-sm">{row.description ?? '-'}</td>
                     <td className="py-4 px-6 text-sm">
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
                         <button
-                          onClick={() => toast({ title: "Not implemented", description: "Edit feature not implemented yet." })}
-                          className="text-primary hover:text-primary/80 transition-colors font-medium"
+                          type="button"
+                          onClick={() => navigate(`/thematic-areas/edit/${row.id}`)}
+                          title="Edit"
+                          className="p-2 text-primary hover:text-primary/80 hover:bg-primary/10 rounded-lg transition-colors"
                         >
-                          Edit
+                          <Pencil size={18} />
                         </button>
                         <button
+                          type="button"
                           onClick={() => {
                             if (confirm(`Delete thematic area "${row.name}"?`)) {
                               deleteMutation.mutate(row.id);
                             }
                           }}
-                          className="text-destructive hover:text-destructive/80 transition-colors font-medium"
+                          title="Delete"
+                          className="p-2 text-destructive hover:text-destructive/80 hover:bg-destructive/10 rounded-lg transition-colors"
                         >
-                          Delete
+                          <Trash2 size={18} />
                         </button>
                       </div>
                     </td>
