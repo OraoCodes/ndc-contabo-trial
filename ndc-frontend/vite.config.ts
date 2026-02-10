@@ -49,9 +49,8 @@ export default defineConfig({
   server: {
     host: "::",
     port: 8080,
-    headers: {
-      "Cache-Control": "no-store, no-cache, must-revalidate",
-    },
+    // Avoid global no-cache in dev: it forces every JS/CSS request to revalidate,
+    // making the app feel slow until you clear cache. Vite's default caching is fine for dev.
   },
 
   // THIS IS THE FIX FOR DEPLOYMENT

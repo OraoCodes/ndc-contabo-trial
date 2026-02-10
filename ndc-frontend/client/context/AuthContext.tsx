@@ -32,17 +32,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Initialize auth state and listen for changes
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        loadUserProfile(session.user.id);
-      } else {
+    // Avoid infinite "Loading..." on reload: getSession() can hang when refreshing
+    // a cached/expired token (e.g. network or cache issues). Resolve after a timeout.
+    const SESSION_CHECK_TIMEOUT_MS = 8000;
+
+    const sessionPromise = supabase.auth.getSession();
+    const timeoutPromise = new Promise<{ data: { session: null } }>((resolve) => {
+      const t = setTimeout(() => {
+        clearTimeout(t);
+        resolve({ data: { session: null } });
+      }, SESSION_CHECK_TIMEOUT_MS);
+    });
+
+    Promise.race([sessionPromise, timeoutPromise])
+      .then(({ data: { session } }) => {
+        setSession(session);
+        if (session?.user) {
+          loadUserProfile(session.user.id);
+        } else {
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+      })
+      .catch(() => {
+        setSession(null);
         setUser(null);
         setIsAuthenticated(false);
-      }
-      setLoading(false);
-    });
+      })
+      .finally(() => {
+        setLoading(false);
+      });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -169,13 +188,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) throw error;
 
       if (data.user && data.session) {
-        // Load user profile with retry logic (same as registration)
+        // Try profile immediately; short retries only if profile not ready yet
         let profileLoaded = false;
-        let retries = 0;
-        const maxRetries = 5;
+        const retryDelaysMs = [0, 150, 300];
         
-        while (!profileLoaded && retries < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 200 * (retries + 1)));
+        for (let attempt = 0; attempt < retryDelaysMs.length && !profileLoaded; attempt++) {
+          if (attempt > 0) await new Promise((r) => setTimeout(r, retryDelaysMs[attempt]));
           
           try {
             const { data: profile, error: profileError } = await supabase
@@ -185,17 +203,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               .single();
             
             if (!profileError && profile) {
-              // Profile exists, load it
-              await loadUserProfile(data.user.id);
+              setUser({
+                id: profile.id,
+                fullName: profile.full_name,
+                email: profile.email,
+                role: profile.role || 'user',
+                organisation: profile.organisation || undefined,
+                phoneNumber: profile.phone_number || undefined,
+                position: profile.position || undefined,
+              });
+              setIsAuthenticated(true);
               profileLoaded = true;
               break;
-            } else if (profileError?.code === 'PGRST116') {
-              // Profile doesn't exist, retry
-              retries++;
-              console.log(`Profile not found during login, retrying... (${retries}/${maxRetries})`);
-            } else {
-              // Other error, break and use fallback
-              console.error('Error checking profile during login:', profileError);
+            }
+            if (profileError?.code !== 'PGRST116') {
+              console.error('Error loading profile during login:', profileError);
               break;
             }
           } catch (err) {
@@ -204,9 +226,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
         }
         
-        // If profile still not loaded, use auth metadata as fallback
         if (!profileLoaded) {
-          console.warn('Profile not loaded after retries during login, using auth metadata');
           const { data: { user: authUser } } = await supabase.auth.getUser();
           if (authUser) {
             setUser({

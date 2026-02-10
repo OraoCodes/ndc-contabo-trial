@@ -1,5 +1,6 @@
 import { MainLayout } from "@/components/MainLayout";
-import { Save, Edit, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Save, Edit, Trash2, ChevronDown, ChevronUp, Info } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { 
@@ -10,10 +11,13 @@ import {
   saveCountyPerformance, 
   getCountyPerformanceByCountyId,
   listIndicators,
-  listThematicAreas
+  listThematicAreas,
+  thematicAreaNameToScoreKey
 } from "@/lib/supabase-api";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, useNavigate } from "react-router-dom";
+import { CountySelector } from "@/components/CountySelector";
+import { KENYA_COUNTIES, isValidCounty } from "@/lib/kenya-counties";
 
 export default function CountyData() {
   const yearOptions = Array.from({ length: 11 }, (_, i) => 2025 + i); // 2025 to 2035
@@ -248,8 +252,27 @@ export default function CountyData() {
     };
   };
 
-  // Update indicator response, comment, or score
+  // Update indicator response, comment, or score (score is clamped to 0..indicator max)
   const updateIndicatorData = (indicatorId, field, value, sectorType) => {
+    if (field === "score" && value !== "" && value !== null && value !== undefined) {
+      const num = parseFloat(value);
+      if (!isNaN(num)) {
+        const ind = indicators.find((i) => i.id.toString() === indicatorId);
+        const maxScore = ind?.weight ?? 10;
+        const clamped = Math.max(0, Math.min(num, maxScore));
+        if (clamped !== num) {
+          const msg = num < 0
+            ? "Score cannot be negative. It has been set to 0."
+            : `Score cannot exceed ${maxScore} for this indicator. It has been limited to ${maxScore}.`;
+          toast({
+            title: "Score limited",
+            description: msg,
+            variant: "destructive",
+          });
+        }
+        value = String(clamped);
+      }
+    }
     if (sectorType === "water") {
       setWaterData(prev => ({
         ...prev,
@@ -277,6 +300,11 @@ export default function CountyData() {
 
       if (!county.trim()) {
         throw new Error("Please enter a county name");
+      }
+
+      // Validate that the county name is a valid Kenya county
+      if (!isValidCounty(county.trim())) {
+        throw new Error("Please select a valid county from the list of 47 Kenya counties");
       }
 
       let countyId = editingId;
@@ -338,30 +366,50 @@ export default function CountyData() {
           sectorIndex += weightedScore;
         });
 
-        // Prepare indicators JSON with new format (response, comment, and score)
+        // Prepare indicators JSON with new format (response, comment, and score); clamp score to indicator max
         const indicatorsJson = {};
         sectorIndicators.forEach(ind => {
           const indicatorId = ind.id.toString();
           const data = dataSource[indicatorId] || { response: "", comment: "", score: "" };
+          const maxScore = ind.weight ?? 10;
+          let scoreVal = data.score !== undefined && data.score !== null && data.score !== "" ? data.score : "";
+          if (scoreVal !== "") {
+            const num = parseFloat(scoreVal);
+            if (!isNaN(num)) scoreVal = Math.max(0, Math.min(num, maxScore));
+          }
           indicatorsJson[indicatorId] = {
             response: data.response || "",
             comment: data.comment || "",
-            score: data.score !== undefined && data.score !== null ? data.score : ""
+            score: scoreVal
           };
         });
+
+        // Map thematic area scores to pillar columns (dynamic: any DB thematic name → pillar key)
+        const pillarKeys = ["governance", "mrv", "mitigation", "adaptation", "finance"];
+        const pillarScores = { governance: [], mrv: [], mitigation: [], adaptation: [], finance: [] };
+        Object.keys(thematicAreaScores).forEach((thematicArea) => {
+          const key = thematicAreaNameToScoreKey(thematicArea);
+          if (key && pillarScores[key]) pillarScores[key].push(thematicAreaScores[thematicArea].score);
+        });
+        const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
+        const governance = avg(pillarScores.governance);
+        const mrv = avg(pillarScores.mrv);
+        const mitigation = avg(pillarScores.mitigation);
+        const adaptation = avg(pillarScores.adaptation);
+        const finance = avg(pillarScores.finance);
 
       await saveCountyPerformance(
         countyId,
         Number(year),
           sectorType,
           {
-            overall_score: sectorIndex, // Sector index (will be combined later for overall)
-            sector_score: sectorIndex, // Sector index score
-            governance: thematicAreaScores["Governance & Policy Framework"]?.score || thematicAreaScores["Governance"]?.score || 0,
-            mrv: thematicAreaScores["MRV"]?.score || 0,
-            mitigation: thematicAreaScores["Mitigation Actions"]?.score || thematicAreaScores["Mitigation"]?.score || 0,
-            adaptation: thematicAreaScores["Adaptation & Resilience"]?.score || thematicAreaScores["Adaptation"]?.score || 0,
-            finance: thematicAreaScores["Climate Finance & Investment"]?.score || thematicAreaScores["Finance"]?.score || 0,
+            overall_score: sectorIndex,
+            sector_score: sectorIndex,
+            governance,
+            mrv,
+            mitigation,
+            adaptation,
+            finance,
           indicators_json: indicatorsJson,
         }
       );
@@ -480,9 +528,9 @@ export default function CountyData() {
 
   return (
     <MainLayout>
-      <div className="max-w-7xl mx-auto space-y-6 py-6">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 py-4 px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">County Data</h1>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
             {lastEdited && (
@@ -517,23 +565,22 @@ export default function CountyData() {
         </div>
 
         {/* County and Year Inputs */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div>
-            <label className="block text-sm font-medium mb-2">County</label>
-            <input
-              type="text"
+            <label className="block text-sm font-medium mb-1.5 sm:mb-2">County</label>
+            <CountySelector
               value={county}
-              onChange={(e) => setCounty(e.target.value)}
-              className="w-full px-4 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Enter county"
+              onChange={setCounty}
+              disabled={!!editingId}
+              className="w-full h-auto text-sm sm:text-base"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2">Year</label>
+            <label className="block text-sm font-medium mb-1.5 sm:mb-2">Year</label>
             <select 
               value={year} 
               onChange={(e) => setYear(e.target.value)} 
-              className="w-full px-4 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             >
               {yearOptions.map(y => (
                 <option key={y} value={y}>{y}</option>
@@ -542,42 +589,51 @@ export default function CountyData() {
           </div>
         </div>
 
+        {/* Score limits info */}
+        <Alert className="border-primary/40 bg-primary/5 text-foreground">
+          <Info className="h-4 w-4 text-primary" />
+          <AlertTitle className="text-primary font-medium">Score limits</AlertTitle>
+          <AlertDescription>
+            Each indicator has a maximum score. Enter a value between 0 and that maximum; values outside this range will be adjusted automatically.
+          </AlertDescription>
+        </Alert>
+
         {/* Water Management Section */}
-        <div className="space-y-4">
-          <h2 className="text-xl sm:text-2xl font-bold text-foreground">Water Management</h2>
+        <div className="space-y-3 sm:space-y-4">
+          <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-foreground">Water Management</h2>
           {Object.keys(groupedIndicators("water")).map(thematicArea => {
             const areaIndicators = groupedIndicators("water")[thematicArea];
             const { score, maxScore } = calculateThematicAreaScore(areaIndicators, waterData, thematicArea, "water");
             const isExpanded = isSectionExpanded("water", thematicArea);
 
           return (
-              <div key={thematicArea} className="border border-border rounded-lg overflow-hidden bg-white">
+              <div key={thematicArea} className="border border-border rounded-lg overflow-hidden bg-white shadow-sm">
                 <button
                   onClick={() => toggleSection("water", thematicArea)}
-                  className="w-full bg-gray-100 px-4 sm:px-6 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0 border-b border-border hover:bg-gray-200 transition-colors"
+                  className="w-full bg-gray-100 px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-3 border-b border-border hover:bg-gray-200 transition-colors"
                 >
-                  <span className="font-semibold text-foreground text-left">{thematicArea}</span>
+                  <span className="font-semibold text-sm sm:text-base text-foreground text-left break-words hyphens-auto pr-2">{thematicArea}</span>
                   <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
-                    <div className="flex gap-2 sm:gap-4 text-xs sm:text-sm">
-                      <span className="text-foreground">Score : {score}</span>
-                      <span className="text-muted-foreground">Max Score : {maxScore}</span>
+                    <div className="flex gap-2 sm:gap-3 lg:gap-4 text-xs sm:text-sm">
+                      <span className="text-foreground whitespace-nowrap">Score: {score}</span>
+                      <span className="text-muted-foreground whitespace-nowrap">Max: {maxScore}</span>
                     </div>
                     {isExpanded ? (
-                      <ChevronUp className="h-5 w-5 text-foreground flex-shrink-0" />
+                      <ChevronUp className="h-4 w-4 sm:h-5 sm:w-5 text-foreground flex-shrink-0" />
                     ) : (
-                      <ChevronDown className="h-5 w-5 text-foreground flex-shrink-0" />
+                      <ChevronDown className="h-4 w-4 sm:h-5 sm:w-5 text-foreground flex-shrink-0" />
                     )}
                   </div>
                 </button>
                 {isExpanded && (
-                  <div className="overflow-x-auto transition-all duration-300 ease-in-out">
-                    <table className="w-full min-w-[600px]">
-                      <thead className="bg-gray-50">
+                  <div className="overflow-x-auto transition-all duration-300 ease-in-out -mx-3 sm:mx-0">
+                    <table className="w-full min-w-[640px]">
+                      <thead className="bg-gray-50 sticky top-0 z-10">
                         <tr>
-                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-foreground border-b">INDICATOR</th>
-                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-foreground border-b">RESPONSE</th>
-                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-foreground border-b">COMMENT</th>
-                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-foreground border-b">SCORE</th>
+                          <th className="px-2 sm:px-3 lg:px-4 py-2 text-left text-xs font-semibold text-foreground border-b uppercase tracking-wider">Indicator</th>
+                          <th className="px-2 sm:px-3 lg:px-4 py-2 text-left text-xs font-semibold text-foreground border-b uppercase tracking-wider">Response</th>
+                          <th className="px-2 sm:px-3 lg:px-4 py-2 text-left text-xs font-semibold text-foreground border-b uppercase tracking-wider">Comment</th>
+                          <th className="px-2 sm:px-3 lg:px-4 py-2 text-left text-xs font-semibold text-foreground border-b uppercase tracking-wider">Score</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -587,38 +643,40 @@ export default function CountyData() {
                           const score = calculateIndicatorScore(ind, data.response, data.score);
                           
                           return (
-                            <tr key={ind.id} className="border-b border-border hover:bg-gray-50">
-                              <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-foreground max-w-[200px] sm:max-w-[300px] lg:max-w-[400px]">
+                            <tr key={ind.id} className="border-b border-border hover:bg-gray-50 transition-colors">
+                              <td className="px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-foreground max-w-[150px] sm:max-w-[250px] lg:max-w-[350px]">
                                 <div className="truncate" title={ind.indicator_text}>
                                   {ind.indicator_text}
                                 </div>
                               </td>
-                              <td className="px-2 sm:px-4 py-2 sm:py-3">
+                              <td className="px-2 sm:px-3 lg:px-4 py-2">
                                 <input
                                   type="text"
                                   value={data.response}
                                   onChange={(e) => updateIndicatorData(indicatorId, "response", e.target.value, "water")}
-                                  className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-input rounded focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm"
-                                  placeholder="Enter response"
+                                  className="w-full min-w-[100px] px-2 py-1.5 border border-input rounded focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm"
+                                  placeholder="Response"
                                 />
                               </td>
-                              <td className="px-2 sm:px-4 py-2 sm:py-3">
+                              <td className="px-2 sm:px-3 lg:px-4 py-2">
                                 <input
                                   type="text"
                                   value={data.comment}
                                   onChange={(e) => updateIndicatorData(indicatorId, "comment", e.target.value, "water")}
-                                  className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-input rounded focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm"
-                                  placeholder="Enter comment"
+                                  className="w-full min-w-[120px] px-2 py-1.5 border border-input rounded focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm"
+                                  placeholder="Comment"
                                 />
                               </td>
-                              <td className="px-2 sm:px-4 py-2 sm:py-3">
+                              <td className="px-2 sm:px-3 lg:px-4 py-2">
                         <input
                           type="number"
-                          min="0"
+                          min={0}
+                          max={ind.weight ?? 10}
                                   step="0.1"
                                   value={data.score !== undefined && data.score !== null && data.score !== "" ? data.score : Math.round(score)}
                                   onChange={(e) => updateIndicatorData(indicatorId, "score", e.target.value, "water")}
-                                  className="w-20 px-2 py-1.5 border border-input rounded text-center text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                  className="w-16 sm:w-20 px-1.5 sm:px-2 py-1.5 border border-input rounded text-center text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                  title={`Max ${ind.weight ?? 10}`}
                                 />
                               </td>
                             </tr>
@@ -634,41 +692,41 @@ export default function CountyData() {
         </div>
 
         {/* Waste Management Section */}
-        <div className="space-y-4">
-          <h2 className="text-xl sm:text-2xl font-bold text-foreground">Waste Management</h2>
+        <div className="space-y-3 sm:space-y-4">
+          <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-foreground">Waste Management</h2>
           {Object.keys(groupedIndicators("waste")).map(thematicArea => {
             const areaIndicators = groupedIndicators("waste")[thematicArea];
             const { score, maxScore } = calculateThematicAreaScore(areaIndicators, wasteData, thematicArea, "waste");
             const isExpanded = isSectionExpanded("waste", thematicArea);
             
             return (
-              <div key={thematicArea} className="border border-border rounded-lg overflow-hidden bg-white">
+              <div key={thematicArea} className="border border-border rounded-lg overflow-hidden bg-white shadow-sm">
                 <button
                   onClick={() => toggleSection("waste", thematicArea)}
-                  className="w-full bg-gray-100 px-4 sm:px-6 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0 border-b border-border hover:bg-gray-200 transition-colors"
+                  className="w-full bg-gray-100 px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-3 border-b border-border hover:bg-gray-200 transition-colors"
                 >
-                  <span className="font-semibold text-foreground text-left">{thematicArea}</span>
+                  <span className="font-semibold text-sm sm:text-base text-foreground text-left break-words hyphens-auto pr-2">{thematicArea}</span>
                   <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
-                    <div className="flex gap-2 sm:gap-4 text-xs sm:text-sm">
-                      <span className="text-foreground">Score : {score}</span>
-                      <span className="text-muted-foreground">Max Score : {maxScore}</span>
+                    <div className="flex gap-2 sm:gap-3 lg:gap-4 text-xs sm:text-sm">
+                      <span className="text-foreground whitespace-nowrap">Score: {score}</span>
+                      <span className="text-muted-foreground whitespace-nowrap">Max: {maxScore}</span>
                     </div>
                     {isExpanded ? (
-                      <ChevronUp className="h-5 w-5 text-foreground flex-shrink-0" />
+                      <ChevronUp className="h-4 w-4 sm:h-5 sm:w-5 text-foreground flex-shrink-0" />
                     ) : (
-                      <ChevronDown className="h-5 w-5 text-foreground flex-shrink-0" />
+                      <ChevronDown className="h-4 w-4 sm:h-5 sm:w-5 text-foreground flex-shrink-0" />
                     )}
                   </div>
                 </button>
                 {isExpanded && (
-                  <div className="overflow-x-auto transition-all duration-300 ease-in-out">
-                    <table className="w-full min-w-[600px]">
-                      <thead className="bg-gray-50">
+                  <div className="overflow-x-auto transition-all duration-300 ease-in-out -mx-3 sm:mx-0">
+                    <table className="w-full min-w-[640px]">
+                      <thead className="bg-gray-50 sticky top-0 z-10">
                         <tr>
-                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-foreground border-b">INDICATOR</th>
-                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-foreground border-b">RESPONSE</th>
-                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-foreground border-b">COMMENT</th>
-                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-foreground border-b">SCORE</th>
+                          <th className="px-2 sm:px-3 lg:px-4 py-2 text-left text-xs font-semibold text-foreground border-b uppercase tracking-wider">Indicator</th>
+                          <th className="px-2 sm:px-3 lg:px-4 py-2 text-left text-xs font-semibold text-foreground border-b uppercase tracking-wider">Response</th>
+                          <th className="px-2 sm:px-3 lg:px-4 py-2 text-left text-xs font-semibold text-foreground border-b uppercase tracking-wider">Comment</th>
+                          <th className="px-2 sm:px-3 lg:px-4 py-2 text-left text-xs font-semibold text-foreground border-b uppercase tracking-wider">Score</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -678,38 +736,40 @@ export default function CountyData() {
                           const score = calculateIndicatorScore(ind, data.response, data.score);
                           
                           return (
-                            <tr key={ind.id} className="border-b border-border hover:bg-gray-50">
-                              <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-foreground max-w-[200px] sm:max-w-[300px] lg:max-w-[400px]">
+                            <tr key={ind.id} className="border-b border-border hover:bg-gray-50 transition-colors">
+                              <td className="px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-foreground max-w-[150px] sm:max-w-[250px] lg:max-w-[350px]">
                                 <div className="truncate" title={ind.indicator_text}>
                                   {ind.indicator_text}
                                 </div>
                               </td>
-                              <td className="px-2 sm:px-4 py-2 sm:py-3">
+                              <td className="px-2 sm:px-3 lg:px-4 py-2">
                                 <input
                                   type="text"
                                   value={data.response}
                                   onChange={(e) => updateIndicatorData(indicatorId, "response", e.target.value, "waste")}
-                                  className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-input rounded focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm"
-                                  placeholder="Enter response"
+                                  className="w-full min-w-[100px] px-2 py-1.5 border border-input rounded focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm"
+                                  placeholder="Response"
                                 />
                               </td>
-                              <td className="px-2 sm:px-4 py-2 sm:py-3">
+                              <td className="px-2 sm:px-3 lg:px-4 py-2">
                                 <input
                                   type="text"
                                   value={data.comment}
                                   onChange={(e) => updateIndicatorData(indicatorId, "comment", e.target.value, "waste")}
-                                  className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-input rounded focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm"
-                                  placeholder="Enter comment"
+                                  className="w-full min-w-[120px] px-2 py-1.5 border border-input rounded focus:outline-none focus:ring-1 focus:ring-primary text-xs sm:text-sm"
+                                  placeholder="Comment"
                                 />
                               </td>
-                              <td className="px-2 sm:px-4 py-2 sm:py-3">
+                              <td className="px-2 sm:px-3 lg:px-4 py-2">
                       <input
                         type="number"
-                                  min="0"
+                                  min={0}
+                                  max={ind.weight ?? 10}
                                   step="0.1"
                                   value={data.score !== undefined && data.score !== null && data.score !== "" ? data.score : Math.round(score)}
                                   onChange={(e) => updateIndicatorData(indicatorId, "score", e.target.value, "waste")}
-                                  className="w-20 px-2 py-1.5 border border-input rounded text-center text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                  className="w-16 sm:w-20 px-1.5 sm:px-2 py-1.5 border border-input rounded text-center text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                  title={`Max ${ind.weight ?? 10}`}
                                 />
                               </td>
                             </tr>
@@ -725,14 +785,14 @@ export default function CountyData() {
         </div>
 
         {/* Save Button */}
-        <div className="flex justify-center pt-4">
+        <div className="flex justify-center pt-4 sm:pt-6">
           <button
             onClick={() => saveMutation.mutate()}
             disabled={saveMutation.isPending || !county || !year || indicatorsLoading}
-            className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white text-lg rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-semibold"
+            className="flex items-center justify-center gap-2 w-full sm:w-auto px-6 sm:px-8 py-2.5 sm:py-3 bg-blue-600 text-white text-base sm:text-lg rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-semibold shadow-lg hover:shadow-xl"
           >
-            <Save size={20} />
-            {saveMutation.isPending ? "Saving..." : "Save"}
+            <Save size={18} className="sm:w-5 sm:h-5" />
+            {saveMutation.isPending ? "Saving..." : "Save County Data"}
           </button>
         </div>
       </div>

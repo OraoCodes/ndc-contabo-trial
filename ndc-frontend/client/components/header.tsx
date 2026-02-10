@@ -22,23 +22,17 @@ export function Header({ currentPage }: { currentPage?: string }) {
   useEffect(() => {
     listCounties()
       .then(data => {
-        const sorted = data.sort((a: County, b: County) => a.name.localeCompare(b.name))
+        const sorted = [...data].sort((a: County, b: County) => a.name.localeCompare(b.name))
         setCounties(sorted)
       })
-      .catch(err => {
-        console.error("Failed to load counties:", err)
-        setCounties([])
-      })
+      .catch(() => setCounties([]))
       .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => {
     listThematicAreas()
       .then(data => setThematicAreasItems(thematicAreasToMenuItems(data)))
-      .catch(err => {
-        console.error("Failed to load thematic areas:", err)
-        setThematicAreasItems([])
-      })
+      .catch(() => setThematicAreasItems([]))
       .finally(() => setLoadingThematic(false))
   }, [])
 

@@ -1,0 +1,17 @@
+[Unit]
+Description=NDC Node API (ndc-new)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/ndc-new
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node dist/server/node-build.mjs
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

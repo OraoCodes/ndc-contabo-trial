@@ -31,9 +31,12 @@ export async function createServer() {
       express.static(distPath, {
         setHeaders(res, filePath) {
           const relative = path.relative(distPath, filePath).replace(/\\/g, "/");
-          // index.html: never cache so users get fresh app after deploy
+          // index.html: never cache so users get fresh app after deploy (avoids
+          // stale HTML pointing to removed hashed assets → 404s and slow loads)
           if (relative === "index.html") {
-            res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+            res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+            res.setHeader("Pragma", "no-cache");
+            res.setHeader("Expires", "0");
             return;
           }
           // Hashed JS/CSS in assets/: safe to cache 1 year (Vite uses content hashes)
@@ -48,7 +51,9 @@ export async function createServer() {
     );
 
     app.get(/^(?!\/api\/).*$/, (req, res) => {
-      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

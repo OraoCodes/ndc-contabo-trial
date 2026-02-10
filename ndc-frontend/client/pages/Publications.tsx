@@ -1,9 +1,10 @@
 import { MainLayout } from "@/components/MainLayout";
-import { Download, Upload } from "lucide-react";
+import { Download, Upload, Trash2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { listPublications, downloadPublication, createPublication } from "@/lib/supabase-api";
+import { listPublications, downloadPublication, deletePublication } from "@/lib/supabase-api";
 import { supabase } from "@/lib/supabase";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 import * as pdfjsLib from "pdfjs-dist";
 
 // Set worker (important!)
@@ -11,6 +12,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.j
 
 export default function Publications() {
     const qc = useQueryClient();
+    const { toast } = useToast();
     const { data: publications, isLoading } = useQuery({
         queryKey: ["publications"],
         queryFn: listPublications,
@@ -53,6 +55,21 @@ export default function Publications() {
         },
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ["publications"] });
+        },
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: (id: number) => deletePublication(id),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["publications"] });
+            toast({ title: "Deleted", description: "Publication deleted." });
+        },
+        onError: (err: unknown) => {
+            toast({
+                title: "Error",
+                description: (err as Error)?.message ?? "Failed to delete publication",
+                variant: "destructive",
+            });
         },
     });
 
@@ -183,7 +200,7 @@ export default function Publications() {
                                     </p>
                                     <p className="text-sm text-foreground/80 mt-2 line-clamp-2">{p.summary}</p>
 
-                                    <div className="mt-4 flex items-center justify-between">
+                                    <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
                                         <button
                                             onClick={() => onDownload(p.id, p.filename)}
                                             className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-background text-foreground text-sm border border-border hover:bg-accent"
@@ -191,7 +208,20 @@ export default function Publications() {
                                             <Download size={14} />
                                             Download
                                         </button>
-                                        <span className="text-xs text-muted-foreground truncate max-w-[120px]">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (window.confirm(`Delete "${p.title}"? This cannot be undone.`)) {
+                                                    deleteMutation.mutate(p.id);
+                                                }
+                                            }}
+                                            disabled={deleteMutation.isPending}
+                                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded text-sm border border-destructive/50 text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                                        >
+                                            <Trash2 size={14} />
+                                            Delete
+                                        </button>
+                                        <span className="text-xs text-muted-foreground truncate max-w-[120px] w-full sm:w-auto order-last sm:order-none">
                                             {p.filename}
                                         </span>
                                     </div>

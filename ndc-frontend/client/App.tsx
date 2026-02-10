@@ -21,15 +21,17 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import HomePage from "./pages/HomePage";
 import WaterManagement from "./pages/WaterManagementPage";
 import WasteManagement from "./pages/WasteManagementPage";
-import Governance from "./pages/GovernancePage";
 import MRV from "./pages/MRVPage";
 import Mitigation from "./pages/MitigationPage";
 import Adaptation from "./pages/AdaptationPage";
 import FinanceTechnologyTransfer from "./pages/FinanceTechnologyTransferPage";
 import CountyPage from "./pages/County";
+import ThematicAreaPage from "./pages/ThematicAreaPage";
 import { AuthProvider } from "./context/AuthContext";
 import PrivateRoute from "./components/PrivateRoute";
 import CountyScoringPage from "./pages/IndicatorPage";
+import AddIndicator from "./pages/AddIndicator";
+import EditIndicator from "./pages/EditIndicator";
 import CountyWaterPage from "./pages/Water-Management";
 import CountyWastePage from "./pages/Waste-Management";
 import AboutToolPage from "./pages/AboutToolPage";
@@ -52,11 +54,11 @@ export const App = () => (
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/Home" element={<HomePage />} />
             <Route path="/county/:countyName" element={<CountyPage />} />
+            <Route path="/thematic/:slug" element={<ThematicAreaPage />} />
             <Route path="/water-management" element={<WaterManagement />} />
             <Route path="/water-management/:countyName" element={<CountyWaterPage />} />
             <Route path="/waste-management" element={<WasteManagement />} />
             <Route path="/waste-management/:countyName" element={<CountyWastePage />} />
-            <Route path="/governance" element={<Governance />} />
             <Route path="/mrv" element={<MRV />} />
             <Route path="/mitigation" element={<Mitigation />} />
             <Route path="/adaptation" element={<Adaptation />} />
@@ -71,6 +73,8 @@ export const App = () => (
               <Route path="/counties-list" element={<CountiesList />} />
               <Route path="/county-data" element={<CountyData />} />
               <Route path="/indicators" element={<CountyScoringPage />} />
+              <Route path="/indicators/add" element={<AddIndicator />} />
+              <Route path="/indicators/edit/:id" element={<EditIndicator />} />
               <Route path="/publications" element={<Publications />} />
               <Route path="/thematic-areas" element={<ThematicAreas />} />
               <Route path="/thematic-areas/add" element={<AddThematicArea />} />

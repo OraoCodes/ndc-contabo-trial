@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { getCountySummaryPerformance, type CountySummaryPerformance } from "@/lib/supabase-api";
+import { KENYA_COUNTIES } from "@/lib/kenya-counties";
 
 // GeoJSON data URL - we'll fetch this from the external source
+// Note: County names from this GeoJSON match exactly with KENYA_COUNTIES constant
 const GEOJSON_URL = "https://raw.githubusercontent.com/abugasavio/ke.counties/master/counties.geojson";
 
 interface CountyFeature {
@@ -25,7 +27,7 @@ interface KenyaInteractiveMapProps {
   sector?: "water" | "waste";
   year?: number;
   onCountyClick?: (countyName: string) => void;
-  highlightedCounty?: string; // Name of county to highlight
+  highlightedCounty?: string;
 }
 
 export function KenyaInteractiveMap({
@@ -41,62 +43,41 @@ export function KenyaInteractiveMap({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch GeoJSON data
   useEffect(() => {
     fetch(GEOJSON_URL)
       .then((res) => res.json())
-      .then((data) => {
-        console.log("GeoJSON loaded:", data.features?.length, "counties");
-        console.log("Sample county names from GeoJSON:", data.features?.slice(0, 5).map((f: CountyFeature) => f.properties.COUNTY));
-        setGeoData(data);
-      })
+      .then((data) => setGeoData(data))
       .catch((err) => {
         console.error("Failed to load map data:", err);
         setError("Failed to load map data");
       });
   }, []);
 
-  // Fetch performance data from Supabase
   useEffect(() => {
     const fetchPerformance = async () => {
       try {
-        // If no year provided, try fallback years
         const yearsToTry = year ? [year] : [new Date().getFullYear(), 2025, 2024, 2023];
         let data: any[] = [];
-        
         for (const tryYear of yearsToTry) {
           try {
             data = await getCountySummaryPerformance(sector, tryYear);
-            if (data.length > 0) {
-              console.log(`Performance data loaded for year ${tryYear}:`, data.length, "counties");
-              break;
-            }
-          } catch (err) {
+            if (data.length > 0) break;
+          } catch {
             continue;
           }
         }
-        
-        console.log("County names from Supabase:", data.map(d => d.name || d.county_name));
-        
         const perfMap: Record<string, CountySummaryPerformance> = {};
         data.forEach((item) => {
           const countyName = item.name || item.county_name;
-          if (countyName) {
-            // Store with normalized key
-            const normalizedName = countyName.toLowerCase().trim();
-            perfMap[normalizedName] = item;
-          }
+          if (countyName) perfMap[countyName.toLowerCase().trim()] = item;
         });
-        
-        console.log("Performance map keys:", Object.keys(perfMap));
         setPerformanceData(perfMap);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Failed to load performance data:", err);
       } finally {
         setLoading(false);
       }
     };
-
     fetchPerformance();
   }, [sector, year]);
 

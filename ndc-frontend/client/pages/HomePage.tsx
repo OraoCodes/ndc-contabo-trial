@@ -54,34 +54,28 @@ export default function Home() {
             try {
                 const data = await listThematicAreas();
                 setThematicAreas(data);
-            } catch (error: any) {
-                setErrorThematicAreas(error.message || "Failed to fetch thematic areas");
+            } catch (error: unknown) {
+                setErrorThematicAreas((error as Error)?.message ?? "Failed to fetch thematic areas");
             } finally {
                 setLoadingThematicAreas(false);
             }
         };
-
         const fetchPublications = async () => {
             try {
                 const data = await listPublications();
                 setPublications(data);
-            } catch (error: any) {
-                setErrorPublications(error.message || "Failed to fetch publications");
+            } catch (error: unknown) {
+                setErrorPublications((error as Error)?.message ?? "Failed to fetch publications");
             } finally {
                 setLoadingPublications(false);
             }
         };
-
         const fetchSummaryData = async () => {
             try {
-                // Try current year first, then fallback to previous years
                 const currentYear = new Date().getFullYear();
                 const yearsToTry = [currentYear, currentYear - 1, currentYear - 2, 2024, 2023, 2022];
-                
-                let waterData: any[] = [];
-                let wasteData: any[] = [];
-                
-                // Try each year until we find data
+                let waterData: CountySummaryPerformance[] = [];
+                let wasteData: CountySummaryPerformance[] = [];
                 for (const year of yearsToTry) {
                     if (waterData.length === 0 || wasteData.length === 0) {
                         try {
@@ -89,7 +83,6 @@ export default function Home() {
                                 getCountySummaryPerformance("water", year).catch(() => []),
                                 getCountySummaryPerformance("waste", year).catch(() => [])
                             ]);
-                            
                             if (water.length > 0 && waterData.length === 0) {
                                 waterData = water;
                                 setDataYear(year);
@@ -98,33 +91,25 @@ export default function Home() {
                                 wasteData = waste;
                                 if (waterData.length === 0) setDataYear(year);
                             }
-                        } catch (err) {
-                            // Continue to next year
-                            console.log(`No data found for year ${year}`);
+                        } catch {
+                            // continue
                         }
                     }
                 }
-                
-                setWaterSummaryData(waterData)
-                setWasteSummaryData(wasteData)
-                
-                if (waterData.length === 0 && wasteData.length === 0) {
-                    setErrorSummaryData("No performance data found. Please add county data first.")
-                }
-            } catch (error: any) {
-                console.error("Error fetching summary data:", error);
-                setErrorSummaryData(error.message || "Failed to load county performance. Please check your Supabase configuration.")
+                setWaterSummaryData(waterData);
+                setWasteSummaryData(wasteData);
+            } catch (error: unknown) {
+                setErrorSummaryData((error as Error)?.message ?? "Unable to load performance data.");
             } finally {
-                setLoadingSummaryData(false)
+                setLoadingSummaryData(false);
             }
-        }
-
+        };
         fetchThematicAreas();
         fetchPublications();
         fetchSummaryData();
     }, []);
 
-        const rawData = activeTab === "water" ? waterSummaryData : wasteSummaryData;
+    const rawData = activeTab === "water" ? waterSummaryData : wasteSummaryData;
     const safeData = Array.isArray(rawData) ? rawData : [];
 
     const rankedData: RankedCounty[] = safeData
@@ -212,25 +197,12 @@ export default function Home() {
                             {loadingSummaryData ? (
                             <div className="text-center py-8">Loading summary data...</div>
                         ) : errorSummaryData ? (
-                                <div className="text-center py-8">
-                                    <div className="text-red-500 mb-4">{errorSummaryData}</div>
-                                    <div className="text-sm text-gray-600 mt-4">
-                                        <p>To add data:</p>
-                                        <ol className="list-decimal list-inside mt-2 space-y-1">
-                                            <li>Make sure Supabase is configured (check environment variables)</li>
-                                            <li>Go to the <Link to="/county-data" className="text-blue-600 hover:underline">County Data</Link> page</li>
-                                            <li>Add a county and fill in the performance data</li>
-                                        </ol>
-                                    </div>
+                                <div className="text-center py-8 text-muted-foreground">
+                                    {errorSummaryData}
                                 </div>
                             ) : safeData.length === 0 ? (
-                                <div className="text-center py-8">
-                                    <div className="text-gray-500 mb-4">
-                                        No data available for {activeTab === "water" ? "Water" : "Waste"} sector
-                                    </div>
-                                    <div className="text-sm text-gray-600 mt-4">
-                                        <p>To add data, go to the <Link to="/county-data" className="text-blue-600 hover:underline">County Data</Link> page and create a new county entry.</p>
-                                    </div>
+                                <div className="text-center py-8 text-muted-foreground">
+                                    No performance data available for {activeTab === "water" ? "Water" : "Waste"} sector yet.
                                 </div>
                             ) : (
                                 <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
@@ -314,11 +286,18 @@ export default function Home() {
                                           hover:border-gray-300 hover:shadow-lg transition-all duration-300 
                                           cursor-pointer"
                                         >
-                                            <span className="text-lg font-medium text-gray-800 pr-4">
-                                                {item.name}
-                                            </span>
+                                            <div className="pr-4 min-w-0">
+                                                <span className="text-lg font-medium text-gray-800 block">
+                                                    {item.name}
+                                                </span>
+                                                {item.sector && (
+                                                    <span className="text-xs text-gray-400 font-normal mt-0.5 block capitalize">
+                                                        {item.sector}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <span className="text-2xl text-gray-400 group-hover:text-blue-600 
-                                             group-hover:translate-x-3 transition-all duration-300">
+                                             group-hover:translate-x-3 transition-all duration-300 flex-shrink-0">
                                                 →
                                             </span>
                                         </div>

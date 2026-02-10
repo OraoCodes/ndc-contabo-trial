@@ -99,6 +99,7 @@ export interface ThematicArea {
   name: string;
   description?: string | null;
   sector?: 'water' | 'waste' | string | null;
+  weight_percentage?: number | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -166,26 +167,92 @@ export function getThematicColumnsForSector(areas: ThematicArea[], sector: 'wate
   return result;
 }
 
-/** Convert thematic areas from API to unique menu items (path + display name) in fixed order. */
-export function thematicAreasToMenuItems(areas: { name: string }[]): { name: string; path: string }[] {
-  const byPath = new Map<string, string>();
-  for (const area of areas) {
-    const route = thematicNameToRoute(area.name);
-    if (route && !byPath.has(route.path)) byPath.set(route.path, route.displayName);
+/** Labels for metric cards / score display: use thematic area name from DB when available. Always returns all 5 pillars. */
+export function getThematicScoreLabelsForSector(areas: ThematicArea[], sector: 'water' | 'waste'): { key: string; label: string }[] {
+  const forSector = areas.filter((a) => (a.sector || '').toLowerCase() === sector);
+  const seen = new Set<string>();
+  const result: { key: string; label: string }[] = [];
+  for (const key of SCORE_KEY_ORDER) {
+    const area = forSector.find((a) => thematicAreaNameToScoreKey(a.name) === key);
+    if (area && !seen.has(key)) {
+      seen.add(key);
+      result.push({ key, label: area.name || SCORE_KEY_SHORT_LABELS[key] || key });
+    } else {
+      result.push({ key, label: SCORE_KEY_SHORT_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1) });
+    }
   }
-  return THEMATIC_NAME_TO_ROUTE
-    .filter((r) => byPath.has(r.path))
-    .map((r) => ({ name: r.displayName, path: r.path }));
+  return result;
 }
 
-export async function listThematicAreas(): Promise<ThematicArea[]> {
-  const { data, error } = await supabase
-    .from('thematic_areas')
-    .select('*')
-    .order('name');
+/**
+ * Build metric card rows from DB thematic areas only (no hardcoded labels).
+ * Returns one row per thematic area that maps to a pillar, ordered by governance → mrv → mitigation → adaptation → finance.
+ */
+export function getThematicScoreRowsFromDb(
+  areas: ThematicArea[],
+  pillars: Record<string, string>
+): { name: string; score: string }[] {
+  const byKey = new Map<string, { name: string; score: string }>();
+  for (const area of areas) {
+    const key = thematicAreaNameToScoreKey(area.name);
+    if (key != null && !byKey.has(key)) {
+      byKey.set(key, { name: area.name, score: pillars[key] ?? '0.0' });
+    }
+  }
+  const result: { name: string; score: string }[] = [];
+  for (const key of SCORE_KEY_ORDER) {
+    const row = byKey.get(key);
+    if (row) result.push(row);
+  }
+  return result;
+}
+
+/** URL-safe slug from thematic area name + sector (e.g. "Flood Risk Management" + "water" -> "flood-risk-management-water"). */
+export function thematicAreaSlug(area: { name: string; sector?: string | null }): string {
+  const base = area.name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
+  const sector = (area.sector || "general").toLowerCase();
+  return base ? `${base}-${sector}` : sector;
+}
+
+/** Find thematic area from list by slug (from thematicAreaSlug). */
+export function findThematicAreaBySlug(
+  areas: ThematicArea[],
+  slug: string
+): ThematicArea | undefined {
+  return areas.find((a) => thematicAreaSlug(a) === slug);
+}
+
+/** Convert thematic areas from API to menu items: all areas from DB, each links to dynamic page /thematic/:slug (name-based). */
+export function thematicAreasToMenuItems(areas: { id: number; name: string; sector?: string | null }[]): { name: string; path: string; sector?: string | null }[] {
+  return areas.map((area) => ({
+    name: area.name,
+    path: `/thematic/${thematicAreaSlug(area)}`,
+    sector: area.sector ?? null,
+  }));
+}
+
+export async function listThematicAreas(opts?: { sector?: 'water' | 'waste' }): Promise<ThematicArea[]> {
+  let q = supabase.from('thematic_areas').select('*');
+  if (opts?.sector) {
+    q = q.eq('sector', opts.sector);
+  }
+  const { data, error } = await q.order('name');
 
   if (error) throw error;
   return data || [];
+}
+
+/** Retrieve thematic areas from the database for each sector (water and waste). */
+export async function listThematicAreasBySector(): Promise<{ water: ThematicArea[]; waste: ThematicArea[] }> {
+  const [water, waste] = await Promise.all([
+    listThematicAreas({ sector: 'water' }),
+    listThematicAreas({ sector: 'waste' }),
+  ]);
+  return { water, waste };
 }
 
 export async function getThematicArea(id: number): Promise<ThematicArea | null> {
@@ -202,12 +269,19 @@ export async function getThematicArea(id: number): Promise<ThematicArea | null> 
   return data;
 }
 
-export async function createThematicArea(payload: { name: string; description?: string }): Promise<ThematicArea> {
+export async function createThematicArea(payload: {
+  name: string;
+  description?: string | null;
+  sector: 'water' | 'waste';
+  weight_percentage: number;
+}): Promise<ThematicArea> {
   const { data, error } = await supabase
     .from('thematic_areas')
     .insert({
       name: payload.name,
-      description: payload.description || null,
+      description: payload.description ?? null,
+      sector: payload.sector,
+      weight_percentage: payload.weight_percentage,
     })
     .select()
     .single();
@@ -218,14 +292,22 @@ export async function createThematicArea(payload: { name: string; description?: 
 
 export async function updateThematicArea(
   id: number,
-  payload: { name?: string; description?: string | null }
+  payload: {
+    name?: string;
+    description?: string | null;
+    sector?: 'water' | 'waste';
+    weight_percentage?: number;
+  }
 ): Promise<ThematicArea> {
+  const update: Record<string, unknown> = {};
+  if (payload.name !== undefined) update.name = payload.name;
+  if (payload.description !== undefined) update.description = payload.description ?? null;
+  if (payload.sector !== undefined) update.sector = payload.sector;
+  if (payload.weight_percentage !== undefined) update.weight_percentage = payload.weight_percentage;
+
   const { data, error } = await supabase
     .from('thematic_areas')
-    .update({
-      ...(payload.name !== undefined && { name: payload.name }),
-      ...(payload.description !== undefined && { description: payload.description || null }),
-    })
+    .update(update)
     .eq('id', id)
     .select()
     .single();
@@ -299,6 +381,24 @@ export async function downloadPublication(id: number): Promise<Blob> {
   if (!data) throw new Error('File not found');
 
   return data;
+}
+
+export async function deletePublication(id: number): Promise<void> {
+  const publication = await getPublication(id);
+  if (!publication) throw new Error('Publication not found');
+
+  if (publication.storage_path) {
+    const { error: storageError } = await supabase.storage
+      .from('publications')
+      .remove([publication.storage_path]);
+    if (storageError) {
+      // Log but continue; delete row so record is not orphaned
+      console.warn('Publication delete: could not remove storage file', storageError);
+    }
+  }
+
+  const { error } = await supabase.from('publications').delete().eq('id', id);
+  if (error) throw error;
 }
 
 // ============================================================================
@@ -425,6 +525,20 @@ export async function getCountyPerformance(
         ((water.finance || 0) + (waste.finance || 0)) /
         (water.finance && waste.finance ? 2 : 1) || 0
       ).toFixed(1),
+    },
+    waterPillars: {
+      governance: Number(water.governance ?? 0).toFixed(1),
+      mrv: Number(water.mrv ?? 0).toFixed(1),
+      mitigation: Number(water.mitigation ?? 0).toFixed(1),
+      adaptation: Number(water.adaptation ?? 0).toFixed(1),
+      finance: Number(water.finance ?? 0).toFixed(1),
+    },
+    wastePillars: {
+      governance: Number(waste.governance ?? 0).toFixed(1),
+      mrv: Number(waste.mrv ?? 0).toFixed(1),
+      mitigation: Number(waste.mitigation ?? 0).toFixed(1),
+      adaptation: Number(waste.adaptation ?? 0).toFixed(1),
+      finance: Number(waste.finance ?? 0).toFixed(1),
     },
     waterIndicators: water.indicators_json || [],
     wasteIndicators: waste.indicators_json || [],
@@ -584,44 +698,103 @@ export async function getDashboardStats(year: number = new Date().getFullYear())
 export interface Indicator {
   id: number;
   sector: 'water' | 'waste';
-  thematic_area: string;
+  thematic_area_id: number;
+  /** Thematic area name (from join); kept for display/backward compat */
+  thematic_area?: string;
+  title: string;
   indicator_text: string;
   weight: number;
+  description?: string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export async function getIndicator(id: number): Promise<Indicator | null> {
+  const { data, error } = await supabase
+    .from('indicators')
+    .select('*, thematic_areas(name)')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw error;
+  }
+  return mapIndicatorRow(data);
+}
+
+function mapIndicatorRow(row: any): Indicator {
+  const thematic_area =
+    (row.thematic_areas as { name?: string } | null)?.name ?? null;
+  const { thematic_areas, ...rest } = row;
+  return { ...rest, thematic_area: thematic_area ?? undefined };
 }
 
 export async function listIndicators(): Promise<Indicator[]> {
   const { data, error } = await supabase
     .from('indicators')
-    .select('*')
+    .select('*, thematic_areas(name)')
     .order('sector')
-    .order('thematic_area')
+    .order('thematic_area_id')
     .order('id');
 
   if (error) throw error;
-  return data || [];
+  return (data || []).map(mapIndicatorRow);
 }
 
 export async function createIndicator(payload: {
   sector: 'water' | 'waste';
-  thematic_area: string;
+  thematic_area_id: number;
+  title: string;
   indicator_text: string;
   weight?: number;
+  description?: string | null;
 }): Promise<Indicator> {
   const { data, error } = await supabase
     .from('indicators')
     .insert({
       sector: payload.sector,
-      thematic_area: payload.thematic_area,
-      indicator_text: payload.indicator_text,
-      weight: payload.weight || 10,
+      thematic_area_id: payload.thematic_area_id,
+      title: payload.title.trim(),
+      indicator_text: payload.indicator_text.trim(),
+      weight: payload.weight ?? 10,
+      description: payload.description ?? null,
     })
-    .select()
+    .select('*, thematic_areas(name)')
     .single();
 
   if (error) throw error;
-  return data;
+  return mapIndicatorRow(data);
+}
+
+export async function updateIndicator(
+  id: number,
+  payload: {
+    sector?: 'water' | 'waste';
+    thematic_area_id?: number;
+    title?: string;
+    indicator_text?: string;
+    weight?: number;
+    description?: string | null;
+  }
+): Promise<Indicator> {
+  const update: Record<string, unknown> = {};
+  if (payload.sector !== undefined) update.sector = payload.sector;
+  if (payload.thematic_area_id !== undefined) update.thematic_area_id = payload.thematic_area_id;
+  if (payload.title !== undefined) update.title = payload.title.trim();
+  if (payload.indicator_text !== undefined) update.indicator_text = payload.indicator_text;
+  if (payload.weight !== undefined) update.weight = payload.weight;
+  if (payload.description !== undefined) update.description = payload.description ?? null;
+
+  const { data, error } = await supabase
+    .from('indicators')
+    .update(update)
+    .eq('id', id)
+    .select('*, thematic_areas(name)')
+    .single();
+
+  if (error) throw error;
+  return mapIndicatorRow(data);
 }
 
 export async function deleteIndicator(id: number): Promise<void> {
