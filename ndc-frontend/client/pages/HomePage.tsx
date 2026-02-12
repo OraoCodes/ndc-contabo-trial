@@ -148,7 +148,7 @@ export default function Home() {
             <Header currentPage="home" />
 
             <HeroBanner
-                title="NDC tracking tool for water and waste management in Kenya"
+                title="NDC tracking tool for water and waste management in Africa"
                 description="Track Kenya county performance in climate action across water and waste sectors"
             />
 
