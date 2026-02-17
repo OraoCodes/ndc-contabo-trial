@@ -468,6 +468,79 @@ export async function getCountySummaryPerformance(
   }));
 }
 
+/**
+ * Fetch county rankings for a sector with dynamic thematic area columns.
+ * Computes scores per thematic area from indicators_json: (sum actual) / (sum max weight) * 100.
+ * Returns { columns, rows } where columns are derived from DB thematic areas.
+ */
+export async function getCountyRankingsForSector(
+  sector: 'water' | 'waste',
+  year: number = 2025
+): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, any>[] }> {
+  const areas = await listThematicAreas({ sector });
+
+  const areaIds = areas.map((a) => a.id);
+  const { data: indicators, error: indErr } = await supabase
+    .from('indicators')
+    .select('id, title, weight, thematic_area_id')
+    .in('thematic_area_id', areaIds.length > 0 ? areaIds : [-1]);
+  if (indErr) throw indErr;
+
+  const { data: perfData, error: perfErr } = await supabase
+    .from('county_performance')
+    .select('county_id, indicators_json, counties(name)')
+    .eq('sector', sector)
+    .eq('year', year);
+  if (perfErr) throw perfErr;
+
+  const columns = areas.map((a) => ({ key: `ta_${a.id}`, label: a.name }));
+
+  const indicatorsByArea = new Map<number, { id: number; weight: number }[]>();
+  for (const ind of indicators || []) {
+    const list = indicatorsByArea.get(ind.thematic_area_id) || [];
+    list.push({ id: ind.id, weight: ind.weight || 0 });
+    indicatorsByArea.set(ind.thematic_area_id, list);
+  }
+
+  const rows: Record<string, any>[] = (perfData || []).map((row: any) => {
+    const json: Record<string, any> = row.indicators_json || {};
+    const result: Record<string, any> = {
+      county: row.counties?.name || 'Unknown',
+    };
+
+    let totalScore = 0;
+    let areaCount = 0;
+
+    for (const area of areas) {
+      const areaInds = indicatorsByArea.get(area.id) || [];
+      let actualSum = 0;
+      let maxSum = 0;
+      for (const ind of areaInds) {
+        const entry = json[String(ind.id)];
+        const actual = entry?.score != null && entry.score !== '' ? Number(entry.score) : 0;
+        actualSum += Number.isFinite(actual) ? actual : 0;
+        maxSum += ind.weight;
+      }
+      const score = maxSum > 0 ? Math.round((actualSum / maxSum) * 100) : 0;
+      result[`ta_${area.id}`] = score;
+      totalScore += score;
+      areaCount++;
+    }
+
+    result.indexScore = areaCount > 0 ? Math.round(totalScore / areaCount) : 0;
+    return result;
+  });
+
+  rows.sort((a, b) => (b.indexScore as number) - (a.indexScore as number));
+  rows.forEach((row, i) => {
+    row.rank = i + 1;
+    const s = row.indexScore as number;
+    row.performance = s >= 80 ? 'Outstanding' : s >= 70 ? 'Satisfactory' : s >= 60 ? 'Good' : s >= 40 ? 'Average' : 'Poor';
+  });
+
+  return { columns, rows };
+}
+
 export async function getCountyPerformance(
   countyName: string,
   year: number = new Date().getFullYear()

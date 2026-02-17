@@ -1,74 +1,122 @@
 "use client"
 
-export function Footer() {
-    return (
-        <footer className="bg-[#0B1138] text-slate-100 pt-12">
-            <div className="max-w-7xl mx-auto px-4 md:px-6">
-                <div>
-                    <h3 className="font-semibold mb-6 text-white">NDC tracking tool for water and waste management in Kenya</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-12">
-                    {/* Brand */}
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { listThematicAreasBySector, thematicAreaSlug } from "@/lib/supabase-api";
+import type { ThematicArea } from "@/lib/supabase-api";
 
-                    <div >
-                        <h4 className="font-semibold mb-6 text-white uppercase text-sm">ABOUT</h4>
-                        <ul className="space-y-3 text-sm">
+export function Footer() {
+    const [waterAreas, setWaterAreas] = useState<ThematicArea[]>([]);
+    const [wasteAreas, setWasteAreas] = useState<ThematicArea[]>([]);
+
+    useEffect(() => {
+        listThematicAreasBySector()
+            .then(({ water, waste }) => {
+                setWaterAreas(water);
+                setWasteAreas(waste);
+            })
+            .catch(() => {});
+    }, []);
+
+    return (
+        <footer className="bg-[#0B1138] text-slate-300">
+            {/* Main content */}
+            <div className="max-w-6xl mx-auto px-6 py-14">
+                {/* Top: title + description */}
+                <div className="mb-10">
+                    <h3 className="text-lg font-bold text-white leading-snug">
+                        NDC Tracking Tool
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-400 max-w-md">
+                        Monitoring water and waste management progress across Kenya's 47 counties.
+                    </p>
+                </div>
+
+                {/* Link columns */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-8 gap-y-8">
+                    {/* About */}
+                    <div>
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-4">
+                            About
+                        </h4>
+                        <ul className="space-y-2.5">
                             <li>
-                                <a href="/about-the-tool" className="hover:text-white transition-colors">
+                                <a
+                                    href="/about-the-tool"
+                                    className="text-sm text-slate-300 hover:text-white transition-colors"
+                                >
                                     About the tool
                                 </a>
                             </li>
-                           {/* <li>
-                                <a href="#" className="hover:text-white transition-colors">
-                                    Partners
-                                </a>
+                            <li>
+                                <Link
+                                    to="/"
+                                    className="text-sm text-slate-300 hover:text-white transition-colors"
+                                >
+                                    Home
+                                </Link>
                             </li>
                             <li>
-                                <a href="#" className="hover:text-white transition-colors">
-                                    FAQs
-                                </a>
-                            </li> */}
+                                <Link
+                                    to="/terms"
+                                    className="text-sm text-slate-300 hover:text-white transition-colors"
+                                >
+                                    Terms
+                                </Link>
+                            </li>
                         </ul>
                     </div>
-                    {/* Thematic Areas */}
+
+                    {/* Water Management */}
                     <div>
-                        <h4 className="font-semibold mb-6 text-white uppercase text-sm">Thematic Areas</h4>
-                        <ul className="space-y-3 text-sm">
-                            <li>
-                                <a href="/governance" className="hover:text-white transition-colors">
-                                    Governance
-                                </a>
-                            </li>
-                            <li>
-                                <a href="/mrv" className="hover:text-white transition-colors">
-                                    MRV
-                                </a>
-                            </li>
-                            <li>
-                                <a href="/mitigation" className="hover:text-white transition-colors">
-                                    Mitigation
-                                </a>
-                            </li>
-                            <li>
-                                <a href="/adaptation" className="hover:text-white transition-colors">
-                                    Adaptation
-                                </a>
-                            </li>
-                            <li>
-                                <a href="/finance-technology-transfer" className="hover:text-white transition-colors">
-                                    Finance & Technology Transfer
-                                </a>
-                            </li>
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-4">
+                            Water Management
+                        </h4>
+                        <ul className="space-y-2.5">
+                            {waterAreas.map((area) => (
+                                <li key={area.id}>
+                                    <Link
+                                        to={`/thematic/${thematicAreaSlug(area)}`}
+                                        className="text-sm text-slate-300 hover:text-white transition-colors"
+                                    >
+                                        {area.name}
+                                    </Link>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+
+                    {/* Waste Management */}
+                    <div>
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-4">
+                            Waste Management
+                        </h4>
+                        <ul className="space-y-2.5">
+                            {wasteAreas.map((area) => (
+                                <li key={area.id}>
+                                    <Link
+                                        to={`/thematic/${thematicAreaSlug(area)}`}
+                                        className="text-sm text-slate-300 hover:text-white transition-colors"
+                                    >
+                                        {area.name}
+                                    </Link>
+                                </li>
+                            ))}
                         </ul>
                     </div>
                 </div>
-
-                {/* Bottom */}
-
             </div>
-            <div className="bg-[#0A0D20] w-full  h-12 mx-auto px-4 md:px-6">
-                <p className="text-sm text-slate-400">Copyright © 2025. All Rights Reserved.</p>
 
+            {/* Divider + copyright */}
+            <div className="border-t border-slate-700/50">
+                <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-2">
+                    <p className="text-xs text-slate-500">
+                        &copy; {new Date().getFullYear()} NDC Tracking Tool. All rights reserved.
+                    </p>
+                    <p className="text-xs text-slate-500">
+                        Republic of Kenya
+                    </p>
+                </div>
             </div>
         </footer>
     )

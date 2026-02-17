@@ -13,7 +13,6 @@ import {
   getCountyPerformance,
   listIndicators,
   listThematicAreasBySector,
-  getThematicScoreRowsFromDb,
   type Indicator,
   type ThematicArea,
 } from "@/lib/supabase-api"
@@ -97,6 +96,36 @@ function buildSectorIndicators(
   return result
 }
 
+/** Compute thematic area scores from indicators_json + indicator definitions.
+ *  Score per thematic area = (sum of actual indicator scores) / (sum of max indicator weights) * 100.
+ */
+function computeThematicScoreRows(
+  thematicAreas: ThematicArea[],
+  indicatorDefs: Indicator[],
+  indicatorsJson: Record<string, { score?: string | number }> | null,
+  sector: "water" | "waste"
+): { name: string; score: string }[] {
+  const json = indicatorsJson && typeof indicatorsJson === "object" && !Array.isArray(indicatorsJson)
+    ? indicatorsJson : {}
+  const sectorIndicators = indicatorDefs.filter((i) => (i.sector || "").toLowerCase() === sector)
+
+  return thematicAreas.map((area) => {
+    const areaInds = sectorIndicators.filter(
+      (i) => i.thematic_area_id === area.id || (i.thematic_area || "").trim() === (area.name || "").trim()
+    )
+    let actualSum = 0
+    let maxSum = 0
+    for (const ind of areaInds) {
+      const entry = json[String(ind.id)]
+      const actual = entry?.score != null && entry.score !== "" ? Number(entry.score) : 0
+      actualSum += Number.isFinite(actual) ? actual : 0
+      maxSum += ind.weight || 0
+    }
+    const pct = maxSum > 0 ? Math.round((actualSum / maxSum) * 100) : 0
+    return { name: area.name, score: String(pct) }
+  })
+}
+
 /** Ordered thematic area names for a sector (for consistent section order). */
 function getThematicAreaOrder(waterOrWaste: Record<string, IndicatorRow[]>, thematicAreasForSector: ThematicArea[]): string[] {
   const fromOrder = thematicAreasForSector.map((a) => a.name).filter((n) => n && waterOrWaste[n]?.length)
@@ -112,8 +141,6 @@ export default function CountyPage() {
     waterScore: string
     wasteScore: string
     indicators: Record<string, string>
-    waterPillars: Record<string, string>
-    wastePillars: Record<string, string>
     water: Record<string, IndicatorRow[]>
     waste: Record<string, IndicatorRow[]>
     waterScoreRows: { name: string; score: string }[]
@@ -174,10 +201,8 @@ export default function CountyPage() {
         const hasWaterIndicatorData = Object.keys(waterJson).length > 0
         const hasWasteIndicatorData = Object.keys(wasteJson).length > 0
 
-        const waterPillars = performance.waterPillars ?? { governance: "0.0", mrv: "0.0", mitigation: "0.0", adaptation: "0.0", finance: "0.0" }
-        const wastePillars = performance.wastePillars ?? { governance: "0.0", mrv: "0.0", mitigation: "0.0", adaptation: "0.0", finance: "0.0" }
-        const waterScoreRows = getThematicScoreRowsFromDb(thematicAreasWater, waterPillars)
-        const wasteScoreRows = getThematicScoreRowsFromDb(thematicAreasWaste, wastePillars)
+        const waterScoreRows = computeThematicScoreRows(thematicAreasWater, indicators || [], waterJson, "water")
+        const wasteScoreRows = computeThematicScoreRows(thematicAreasWaste, indicators || [], wasteJson, "waste")
 
         const waterOrder = getThematicAreaOrder(water, thematicAreasWater)
         const wasteOrder = getThematicAreaOrder(waste, thematicAreasWaste)
@@ -216,8 +241,6 @@ export default function CountyPage() {
             adaptation: performance.indicators?.adaptation ?? "0.0",
             finance: performance.indicators?.finance ?? "0.0",
           },
-          waterPillars,
-          wastePillars,
           water,
           waste,
           waterScoreRows,
@@ -319,14 +342,16 @@ export default function CountyPage() {
               <div className="w-full bg-white/70 rounded-full h-4">
                 <div className="bg-blue-600 h-full rounded-full transition-all duration-1000" style={{ width: `${data.waterScore}%` }} />
               </div>
-              <div className="mt-6 space-y-3 text-sm">
-                {data.waterScoreRows.map((row) => (
-                  <div key={row.name} className="flex justify-between font-medium">
-                    <span>{row.name}</span>
-                    <span>{row.score}/100</span>
-                  </div>
-                ))}
-              </div>
+              {data.waterScoreRows.length > 0 && (
+                <div className="mt-6 space-y-3 text-sm">
+                  {data.waterScoreRows.map((row) => (
+                    <div key={row.name} className="flex justify-between font-medium">
+                      <span>{row.name}</span>
+                      <span>{row.score}%</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-8 border">
@@ -340,14 +365,16 @@ export default function CountyPage() {
               <div className="w-full bg-white/70 rounded-full h-4">
                 <div className="bg-green-600 h-full rounded-full transition-all duration-1000" style={{ width: `${data.wasteScore}%` }} />
               </div>
-              <div className="mt-6 space-y-3 text-sm">
-                {data.wasteScoreRows.map((row) => (
-                  <div key={row.name} className="flex justify-between font-medium">
-                    <span>{row.name}</span>
-                    <span>{row.score}/100</span>
-                  </div>
-                ))}
-              </div>
+              {data.wasteScoreRows.length > 0 && (
+                <div className="mt-6 space-y-3 text-sm">
+                  {data.wasteScoreRows.map((row) => (
+                    <div key={row.name} className="flex justify-between font-medium">
+                      <span>{row.name}</span>
+                      <span>{row.score}%</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

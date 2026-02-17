@@ -1,6 +1,5 @@
 import { useLocation } from "react-router-dom";
 import { useEffect } from "react";
-import { MainLayout } from "@/components/MainLayout";
 
 const NotFound = () => {
   const location = useLocation();
@@ -13,20 +12,21 @@ const NotFound = () => {
   }, [location.pathname]);
 
   return (
-    <MainLayout>
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-foreground mb-4">404</h1>
-          <p className="text-lg text-muted-foreground mb-6">Page not found</p>
-          <p className="text-sm text-muted-foreground mb-6">
-            The page you're looking for doesn't exist. Use the navigation menu to explore the dashboard.
-          </p>
-          <a href="/" className="inline-block px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity">
-            Return to Home
-          </a>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="text-center px-6">
+        <h1 className="text-7xl font-extrabold text-primary mb-4">404</h1>
+        <p className="text-2xl font-semibold text-foreground mb-2">Page not found</p>
+        <p className="text-sm text-muted-foreground mb-8 max-w-md mx-auto">
+          The page you're looking for doesn't exist or may have been moved.
+        </p>
+        <a
+          href="/"
+          className="inline-block px-6 py-2.5 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity font-medium"
+        >
+          Go to Homepage
+        </a>
       </div>
-    </MainLayout>
+    </div>
   );
 };
 
