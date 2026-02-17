@@ -545,6 +545,23 @@ export async function getCountyPerformance(
   };
 }
 
+/** Fetch all county performance rows for a year, with indicators_json and county name. */
+export async function getAllCountyIndicatorData(year: number): Promise<
+  { county_name: string; sector: string; indicators_json: Record<string, { score?: number | string; response?: string; comment?: string }> }[]
+> {
+  const { data, error } = await supabase
+    .from('county_performance')
+    .select('sector, indicators_json, counties(name)')
+    .eq('year', year);
+
+  if (error) throw error;
+  return (data || []).map((row: any) => ({
+    county_name: row.counties?.name || 'Unknown',
+    sector: row.sector,
+    indicators_json: row.indicators_json || {},
+  }));
+}
+
 export async function getCountyPerformanceByCountyId(
   countyId: number,
   year: number,
@@ -737,6 +754,18 @@ export async function listIndicators(): Promise<Indicator[]> {
     .order('sector')
     .order('thematic_area_id')
     .order('id');
+
+  if (error) throw error;
+  return (data || []).map(mapIndicatorRow);
+}
+
+/** Fetch indicators that belong to a specific thematic area (by ID). */
+export async function listIndicatorsByThematicArea(thematicAreaId: number): Promise<Indicator[]> {
+  const { data, error } = await supabase
+    .from('indicators')
+    .select('*, thematic_areas(name)')
+    .eq('thematic_area_id', thematicAreaId)
+    .order('title');
 
   if (error) throw error;
   return (data || []).map(mapIndicatorRow);

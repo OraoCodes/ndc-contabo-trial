@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # deploy/deploy.sh
-# Run this on the VPS from the repository root (where this script lives).
+# Run this on the VPS from the ndc-frontend directory: ./deploy/deploy.sh
 # It builds the project, installs production deps, copies the built SPA
 # into `/var/www/ndc/dist/spa`, installs the Apache site if needed,
 # installs the systemd unit and restarts services.

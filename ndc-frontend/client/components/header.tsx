@@ -1,7 +1,7 @@
 // client/components/header.tsx
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Link } from "react-router-dom"
 import { Search, Menu, X, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -12,10 +12,12 @@ interface County {
   name: string
 }
 
+type ThematicMenuItem = { name: string; path: string; sector?: string | null }
+
 export function Header({ currentPage }: { currentPage?: string }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [counties, setCounties] = useState<County[]>([])
-  const [thematicAreasItems, setThematicAreasItems] = useState<{ name: string; path: string }[]>([])
+  const [thematicAreasItems, setThematicAreasItems] = useState<ThematicMenuItem[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingThematic, setLoadingThematic] = useState(true)
 
@@ -41,17 +43,12 @@ export function Header({ currentPage }: { currentPage?: string }) {
     path: `/county/${county.name.toLowerCase().replace(/\s+/g, '-')}`
   }))
 
-  const thematicSections = [
-    {
-      items: [
-        { name: 'Water Management', path: '/water-management' },
-        { name: 'Waste Management', path: '/waste-management' },
-      ],
-    },
-    {
-      label: 'Thematic areas',
-      items: thematicAreasItems,
-    },
+  // Nested structure: Water Management and Waste Management as non-clickable parents; thematic areas as children
+  const waterItems = thematicAreasItems.filter((i) => (i.sector || '').toLowerCase() === 'water')
+  const wasteItems = thematicAreasItems.filter((i) => (i.sector || '').toLowerCase() === 'waste')
+  const thematicNestedSections: { parentLabel: string; items: ThematicMenuItem[] }[] = [
+    { parentLabel: 'Water Management', items: waterItems },
+    { parentLabel: 'Waste Management', items: wasteItems },
   ]
 
   return (
@@ -83,7 +80,7 @@ export function Header({ currentPage }: { currentPage?: string }) {
                 <span className="text-xs">Thematic areas...</span>
               </div>
             ) : (
-              <Dropdown title="THEMATIC AREAS" sections={thematicSections} currentPage={currentPage} />
+              <Dropdown title="THEMATIC AREAS" nestedSections={thematicNestedSections} currentPage={currentPage} />
             )}
             
             {loading ? (
@@ -121,7 +118,7 @@ export function Header({ currentPage }: { currentPage?: string }) {
                     <span>Thematic areas...</span>
                   </div>
                 ) : (
-                  <MobileDropdown title="Thematic Areas" sections={thematicSections} onClose={() => setMobileMenuOpen(false)} />
+                  <MobileDropdown title="Thematic Areas" nestedSections={thematicNestedSections} onClose={() => setMobileMenuOpen(false)} />
                 )}
                 
                 {loading ? (
@@ -145,92 +142,207 @@ export function Header({ currentPage }: { currentPage?: string }) {
 
 type MenuItem = { name: string; path: string }
 type MenuSection = { label?: string; items: MenuItem[] }
+type NestedSection = { parentLabel: string; items: MenuItem[] }
 
-// Desktop Dropdown: accepts either flat items (COUNTIES) or sections (THEMATIC AREAS)
+// Desktop Dropdown: accepts flat items (COUNTIES), sections, or nestedSections (THEMATIC AREAS: Water/Waste parents with thematic children)
 function Dropdown({
   title,
   items,
   sections,
+  nestedSections,
   currentPage,
 }: {
   title: string
   items?: MenuItem[]
   sections?: MenuSection[]
+  nestedSections?: NestedSection[]
   currentPage?: string
 }) {
   const resolvedSections: MenuSection[] = sections ?? (items?.length ? [{ items }] : [])
-  const allItems = resolvedSections.flatMap(s => s.items)
+  const allItemsFromSections = resolvedSections.flatMap(s => s.items)
+  const allItemsFromNested = nestedSections?.flatMap(n => n.items) ?? []
+  const allItems = nestedSections?.length ? allItemsFromNested : allItemsFromSections
   const isActive = allItems.some(i => currentPage?.includes(i.path.split('/')[1]))
+
+  const [open, setOpen] = useState(false)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const menuId = `nav-menu-${title.toLowerCase().replace(/\s+/g, '-')}`
+  const triggerId = `${menuId}-trigger`
+
+  const handleOpen = useCallback(() => {
+    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null }
+    setOpen(true)
+  }, [])
+
+  const handleClose = useCallback(() => {
+    closeTimer.current = setTimeout(() => setOpen(false), 150)
+  }, [])
+
   return (
-    <div className="relative group">
-      <button className={`flex items-center gap-1 hover:text-blue-600 ${isActive ? "text-blue-600 font-bold" : "text-gray-700"}`}>
+    <div
+      className="relative"
+      onMouseEnter={handleOpen}
+      onMouseLeave={handleClose}
+    >
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        id={triggerId}
+        className={`flex items-center gap-1 hover:text-blue-600 ${isActive ? "text-blue-600 font-bold" : "text-gray-700"}`}
+        onClick={() => setOpen((prev) => !prev)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setOpen((prev) => !prev)
+          }
+          if (e.key === 'Escape') setOpen(false)
+        }}
+      >
         {title}
-        <svg className="w-3 h-3 transition-transform group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      <div className="absolute left-1/2 top-full -translate-x-1/2 mt-3 w-56 bg-white rounded-lg shadow-xl border border-gray-100 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[9999]">
-        {resolvedSections.map((section, idx) => (
-          <div key={idx}>
-            {idx > 0 && <div className="my-2 border-t border-gray-100" />}
-            {section.label && (
-              <div className="px-5 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                {section.label}
-              </div>
-            )}
-            {section.items.map(item => (
-              <Link key={item.path} to={item.path} className="block px-5 py-3 text-sm hover:bg-blue-50 hover:text-blue-600">
-                {item.name}
-              </Link>
+      {/* Invisible bridge spans the gap between trigger and panel so the mouse doesn't leave the container */}
+      {open && <div className="absolute left-0 right-0 top-full h-3" aria-hidden />}
+      <div
+        id={menuId}
+        role="menu"
+        aria-labelledby={triggerId}
+        className={`absolute left-1/2 top-full -translate-x-1/2 pt-3 z-[9999] transition-all ${open ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"}`}
+      >
+        <div className="w-56 bg-white rounded-lg shadow-xl border border-gray-100 py-2">
+        {nestedSections && nestedSections.length > 0 ? (
+          <ul className="list-none p-0 m-0">
+            {nestedSections.map((group, groupIdx) => (
+              <li key={groupIdx} role="group" aria-label={group.parentLabel} className={groupIdx > 0 ? "mt-2 pt-2 border-t border-gray-100" : ""}>
+                <div className="px-5 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500 cursor-default" role="presentation">
+                  {group.parentLabel}
+                </div>
+                <ul className="list-none p-0 m-0" role="group">
+                  {group.items.map((item, itemIdx) => (
+                    <li key={item.path} role="none">
+                      <Link
+                        role="menuitem"
+                        to={item.path}
+                        className="block px-5 py-3 text-sm hover:bg-blue-50 hover:text-blue-600 focus:bg-blue-50 focus:text-blue-600 focus:outline-none"
+                        tabIndex={open ? 0 : -1}
+                      >
+                        {item.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </li>
             ))}
-          </div>
-        ))}
+          </ul>
+        ) : (
+          resolvedSections.map((section, idx) => (
+            <div key={idx}>
+              {idx > 0 && <div className="my-2 border-t border-gray-100" />}
+              {section.label && (
+                <div className="px-5 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  {section.label}
+                </div>
+              )}
+              {section.items.map(item => (
+                <Link key={item.path} to={item.path} className="block px-5 py-3 text-sm hover:bg-blue-50 hover:text-blue-600" role="menuitem">
+                  {item.name}
+                </Link>
+              ))}
+            </div>
+          ))
+        )}
+        </div>
       </div>
     </div>
   )
 }
 
-// Mobile Dropdown: accepts either flat items (Counties) or sections (Thematic Areas)
+// Mobile Dropdown: accepts flat items (Counties), sections, or nestedSections (Thematic Areas: Water/Waste parents with thematic children)
 function MobileDropdown({
   title,
   items,
   sections,
+  nestedSections,
   onClose,
 }: {
   title: string
   items?: MenuItem[]
   sections?: MenuSection[]
+  nestedSections?: NestedSection[]
   onClose: () => void
 }) {
   const [open, setOpen] = useState(false)
+  const [expandedParent, setExpandedParent] = useState<string | null>(null)
   const resolvedSections: MenuSection[] = sections ?? (items?.length ? [{ items }] : [])
+
   return (
     <div className="border-b border-gray-100 pb-4">
-      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between text-left">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={`mobile-${title.toLowerCase().replace(/\s+/g, '-')}-panel`}
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between text-left py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+      >
         {title}
-        <svg className={`w-5 h-5 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className={`w-5 h-5 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
       {open && (
-        <div className="mt-3 ml-4 space-y-4">
-          {resolvedSections.map((section, idx) => (
-            <div key={idx}>
-              {idx > 0 && <div className="border-t border-gray-100 pt-3 mt-3" />}
-              {section.label && (
-                <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">
-                  {section.label}
+        <div id={`mobile-${title.toLowerCase().replace(/\s+/g, '-')}-panel`} className="mt-3 ml-4 space-y-4" role="region" aria-label={title}>
+          {nestedSections && nestedSections.length > 0 ? (
+            <ul className="list-none p-0 m-0 space-y-3">
+              {nestedSections.map((group) => (
+                <li key={group.parentLabel} role="group" aria-label={group.parentLabel}>
+                  <button
+                    type="button"
+                    aria-expanded={expandedParent === group.parentLabel}
+                    onClick={() => setExpandedParent((p) => (p === group.parentLabel ? null : group.parentLabel))}
+                    className="w-full flex items-center justify-between text-left py-2 text-xs font-semibold uppercase tracking-wider text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                  >
+                    {group.parentLabel}
+                    <svg className={`w-4 h-4 transition-transform ${expandedParent === group.parentLabel ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {expandedParent === group.parentLabel && (
+                    <ul className="list-none p-0 mt-2 ml-2 space-y-2 border-l-2 border-gray-100 pl-3">
+                      {group.items.map((item) => (
+                        <li key={item.path}>
+                          <Link to={item.path} onClick={onClose} className="block py-2 text-gray-700 hover:text-blue-600 focus:outline-none focus:text-blue-600" role="menuitem">
+                            {item.name}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            resolvedSections.map((section, idx) => (
+              <div key={idx}>
+                {idx > 0 && <div className="border-t border-gray-100 pt-3 mt-3" />}
+                {section.label && (
+                  <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">
+                    {section.label}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  {section.items.map(item => (
+                    <Link key={item.path} to={item.path} onClick={onClose} className="block py-2 text-gray-700 hover:text-blue-600" role="menuitem">
+                      {item.name}
+                    </Link>
+                  ))}
                 </div>
-              )}
-              <div className="space-y-2">
-                {section.items.map(item => (
-                  <Link key={item.path} to={item.path} onClick={onClose} className="block py-2 text-gray-700 hover:text-blue-600">
-                    {item.name}
-                  </Link>
-                ))}
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       )}
     </div>

@@ -260,16 +260,6 @@ export default function CountyData() {
         const ind = indicators.find((i) => i.id.toString() === indicatorId);
         const maxScore = ind?.weight ?? 10;
         const clamped = Math.max(0, Math.min(num, maxScore));
-        if (clamped !== num) {
-          const msg = num < 0
-            ? "Score cannot be negative. It has been set to 0."
-            : `Score cannot exceed ${maxScore} for this indicator. It has been limited to ${maxScore}.`;
-          toast({
-            title: "Score limited",
-            description: msg,
-            variant: "destructive",
-          });
-        }
         value = String(clamped);
       }
     }
@@ -598,6 +588,35 @@ export default function CountyData() {
           </AlertDescription>
         </Alert>
 
+        {/* Methodology info */}
+        <Alert className="border-muted-foreground/30 bg-muted/40 text-foreground">
+          <Info className="h-4 w-4 text-muted-foreground" />
+          <AlertTitle className="text-primary font-semibold italic">How the County Sector Index Score is Calculated</AlertTitle>
+          <AlertDescription className="mt-2 space-y-4 text-sm">
+            <p>The index score for each sector at the county level is calculated in two main steps:</p>
+
+            <div>
+              <p className="font-semibold">Step 1: Calculate the Thematic Area Score</p>
+              <p className="mt-1">Each sector is made up of several thematic areas, and each thematic area contains a set of indicators.</p>
+              <ul className="list-disc list-inside mt-2 space-y-1 ml-2">
+                <li>The scores of all indicators under a specific thematic area are first added together.</li>
+                <li>This total is then converted into a percentage (%) to produce the <strong>thematic area score</strong>.</li>
+              </ul>
+            </div>
+
+            <div>
+              <p className="font-semibold">Step 2: Calculate the Overall Sector Score</p>
+              <p className="mt-1">Each thematic area contributes differently to the overall sector performance, based on its assigned weight.</p>
+              <ul className="list-disc list-inside mt-2 space-y-1 ml-2">
+                <li>The thematic area score is multiplied by its respective weight (%) to get a <strong>weighted thematic score</strong>.</li>
+                <li>All weighted thematic scores within the sector are then added together.</li>
+              </ul>
+            </div>
+
+            <p>The final result is the <strong>overall sector index score for the county</strong>, expressed as a percentage.</p>
+          </AlertDescription>
+        </Alert>
+
         {/* Water Management Section */}
         <div className="space-y-3 sm:space-y-4">
           <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-foreground">Water Management</h2>
@@ -615,7 +634,7 @@ export default function CountyData() {
                   <span className="font-semibold text-sm sm:text-base text-foreground text-left break-words hyphens-auto pr-2">{thematicArea}</span>
                   <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
                     <div className="flex gap-2 sm:gap-3 lg:gap-4 text-xs sm:text-sm">
-                      <span className="text-foreground whitespace-nowrap">Score: {score}</span>
+                      <span className="text-foreground whitespace-nowrap">Score: {score}%</span>
                       <span className="text-muted-foreground whitespace-nowrap">Max: {maxScore}</span>
                     </div>
                     {isExpanded ? (
@@ -668,16 +687,18 @@ export default function CountyData() {
                                 />
                               </td>
                               <td className="px-2 sm:px-3 lg:px-4 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          max={ind.weight ?? 10}
-                                  step="0.1"
-                                  value={data.score !== undefined && data.score !== null && data.score !== "" ? data.score : Math.round(score)}
-                                  onChange={(e) => updateIndicatorData(indicatorId, "score", e.target.value, "water")}
-                                  className="w-16 sm:w-20 px-1.5 sm:px-2 py-1.5 border border-input rounded text-center text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                                  title={`Max ${ind.weight ?? 10}`}
-                                />
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={ind.weight ?? 10}
+                                    step="0.1"
+                                    value={data.score !== undefined && data.score !== null && data.score !== "" ? data.score : Math.round(score)}
+                                    onChange={(e) => updateIndicatorData(indicatorId, "score", e.target.value, "water")}
+                                    className="w-14 sm:w-16 px-1.5 py-1.5 border border-input rounded text-center text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                  />
+                                  <span className="text-xs text-muted-foreground whitespace-nowrap">/ {ind.weight ?? 10}</span>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -708,7 +729,7 @@ export default function CountyData() {
                   <span className="font-semibold text-sm sm:text-base text-foreground text-left break-words hyphens-auto pr-2">{thematicArea}</span>
                   <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
                     <div className="flex gap-2 sm:gap-3 lg:gap-4 text-xs sm:text-sm">
-                      <span className="text-foreground whitespace-nowrap">Score: {score}</span>
+                      <span className="text-foreground whitespace-nowrap">Score: {score}%</span>
                       <span className="text-muted-foreground whitespace-nowrap">Max: {maxScore}</span>
                     </div>
                     {isExpanded ? (
@@ -761,16 +782,18 @@ export default function CountyData() {
                                 />
                               </td>
                               <td className="px-2 sm:px-3 lg:px-4 py-2">
-                      <input
-                        type="number"
-                                  min={0}
-                                  max={ind.weight ?? 10}
-                                  step="0.1"
-                                  value={data.score !== undefined && data.score !== null && data.score !== "" ? data.score : Math.round(score)}
-                                  onChange={(e) => updateIndicatorData(indicatorId, "score", e.target.value, "waste")}
-                                  className="w-16 sm:w-20 px-1.5 sm:px-2 py-1.5 border border-input rounded text-center text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                                  title={`Max ${ind.weight ?? 10}`}
-                                />
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={ind.weight ?? 10}
+                                    step="0.1"
+                                    value={data.score !== undefined && data.score !== null && data.score !== "" ? data.score : Math.round(score)}
+                                    onChange={(e) => updateIndicatorData(indicatorId, "score", e.target.value, "waste")}
+                                    className="w-14 sm:w-16 px-1.5 py-1.5 border border-input rounded text-center text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                  />
+                                  <span className="text-xs text-muted-foreground whitespace-nowrap">/ {ind.weight ?? 10}</span>
+                                </div>
                               </td>
                             </tr>
                           );
