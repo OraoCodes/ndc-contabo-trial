@@ -317,6 +317,19 @@ export async function updateThematicArea(
 }
 
 export async function deleteThematicArea(id: number): Promise<void> {
+  const { count, error: countErr } = await supabase
+    .from('indicators')
+    .select('id', { count: 'exact', head: true })
+    .eq('thematic_area_id', id);
+
+  if (countErr) throw countErr;
+
+  if (count && count > 0) {
+    throw new Error(
+      `This thematic area has ${count} indicator${count > 1 ? 's' : ''} linked to it. Please delete all its indicators first before removing the thematic area.`
+    );
+  }
+
   const { error } = await supabase
     .from('thematic_areas')
     .delete()

@@ -23,7 +23,12 @@ export default function ThematicAreas() {
       toast({ title: "Deleted", description: "Thematic area deleted." });
     },
     onError: (err: any) => {
-      toast({ title: "Error", description: err?.message ?? "Failed to delete" });
+      const msg = err?.message ?? "Failed to delete";
+      toast({
+        title: "Cannot delete thematic area",
+        description: msg,
+        variant: "destructive",
+      });
     },
   });
 
@@ -104,7 +109,7 @@ export default function ThematicAreas() {
                         <button
                           type="button"
                           onClick={() => {
-                            if (confirm(`Delete thematic area "${row.name}"?`)) {
+                            if (confirm(`Delete thematic area "${row.name}"?\n\nNote: You must delete all indicators linked to this thematic area first, otherwise the deletion will fail.`)) {
                               deleteMutation.mutate(row.id);
                             }
                           }}
