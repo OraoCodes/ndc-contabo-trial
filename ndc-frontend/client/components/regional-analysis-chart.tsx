@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
-import { getCountySummaryPerformance } from "@/lib/supabase-api"
+import { getCountyRankingsForSector } from "@/lib/supabase-api"
 
 interface RegionalAnalysisChartProps {
   title?: string
@@ -13,64 +13,43 @@ interface RegionalAnalysisChartProps {
 }
 
 export function RegionalAnalysisChart({ title = "Regional Analysis", type }: RegionalAnalysisChartProps) {
-  const [chartData, setChartData] = useState<any[]>([])
+  const [chartData, setChartData] = useState<{ name: string; value: number }[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchAverages = async () => {
       try {
         setLoading(true)
-        
-        // Try current year first, then fallback to previous years
-        const currentYear = new Date().getFullYear();
-        const yearsToTry = [currentYear, currentYear - 1, 2025, 2024, 2023];
-        
-        let summary: any[] = [];
+
+        const yearsToTry = [2025, 2024, 2023]
+        let columns: { key: string; label: string }[] = []
+        let rows: Record<string, any>[] = []
+
         for (const year of yearsToTry) {
-          if (summary.length === 0) {
-            try {
-              const yearData = await getCountySummaryPerformance(type, year);
-              if (yearData && yearData.length > 0) {
-                summary = yearData;
-                console.log(`RegionalAnalysisChart: Found ${type} data for year ${year}:`, summary.length, "records");
-                break;
-              }
-            } catch (err) {
-              // Continue to next year
-              console.log(`RegionalAnalysisChart: No data found for year ${year}`);
+          try {
+            const result = await getCountyRankingsForSector(type, year)
+            if (result.rows.length > 0) {
+              columns = result.columns
+              rows = result.rows
+              break
             }
+          } catch {
+            continue
           }
         }
 
-        if (!summary || summary.length === 0) {
+        if (rows.length === 0 || columns.length === 0) {
           setChartData([])
           return
         }
 
-        const totals = summary.reduce((acc: any, county: any) => {
-          acc.governance += Number(county.governance || 0)
-          acc.mrv += Number(county.mrv || 0)
-          acc.mitigation += Number(county.mitigation || 0)
-          acc.adaptation += Number(county.adaptation_resilience || county.adaptation || 0)
-          acc.finance += Number(county.finance || 0)
-          return acc
-        }, {
-          governance: 0,
-          mrv: 0,
-          mitigation: 0,
-          adaptation: 0,
-          finance: 0
+        const averages = columns.map((col) => {
+          const total = rows.reduce((sum, row) => sum + (Number(row[col.key]) || 0), 0)
+          return {
+            name: col.label,
+            value: Math.round(total / rows.length),
+          }
         })
-
-        const countyCount = summary.length
-
-        const averages = [
-          { name: "Governance", value: Math.round(totals.governance / countyCount) },
-          { name: "MRV", value: Math.round(totals.mrv / countyCount) },
-          { name: "Mitigation", value: Math.round(totals.mitigation / countyCount) },
-          { name: "Adaptation", value: Math.round(totals.adaptation / countyCount) },
-          { name: "Finance & Tech", value: Math.round(totals.finance / countyCount) },
-        ]
 
         setChartData(averages)
       } catch (err) {
@@ -84,7 +63,7 @@ export function RegionalAnalysisChart({ title = "Regional Analysis", type }: Reg
     fetchAverages()
   }, [type])
 
-  const barColor = type === "water" ? "#3b82f6" : "#10b981" // blue for water, green for waste
+  const barColor = type === "water" ? "#3b82f6" : "#10b981"
 
   if (loading) {
     return (
@@ -124,15 +103,15 @@ export function RegionalAnalysisChart({ title = "Regional Analysis", type }: Reg
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 60 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis 
-              dataKey="name" 
-              tick={{ fontSize: 12 }} 
-              angle={-45} 
-              textAnchor="end" 
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: 12 }}
+              angle={-45}
+              textAnchor="end"
               height={80}
             />
-            <YAxis 
-              tick={{ fontSize: 12 }} 
+            <YAxis
+              tick={{ fontSize: 12 }}
               domain={[0, 100]}
               ticks={[0, 20, 40, 60, 80, 100]}
               label={{ value: "Average Score (%)", angle: -90, position: "insideLeft" }}
@@ -141,9 +120,9 @@ export function RegionalAnalysisChart({ title = "Regional Analysis", type }: Reg
               formatter={(value: number) => `${value}%`}
               contentStyle={{ backgroundColor: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: "8px" }}
             />
-            <Bar 
-              dataKey="value" 
-              fill={barColor} 
+            <Bar
+              dataKey="value"
+              fill={barColor}
               radius={[8, 8, 0, 0]}
             />
           </BarChart>
