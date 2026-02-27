@@ -148,7 +148,7 @@ export default function Home() {
             <Header currentPage="home" />
 
             <HeroBanner
-                title="NDC tracking tool for water and waste management in Africa"
+                title="NDC tracking tool for water and waste management in Kenya"
                 description="Track Kenya county performance in climate action across water and waste sectors"
             />
 
@@ -210,10 +210,10 @@ export default function Home() {
                                         <table className="w-full">
                                             <thead className="bg-slate-50 border-b">
                                                 <tr>
-                                                    <th className="px-6 py-4 text-left font-semibold">Rank</th>
+                                                    <th className="px-6 py-4 text-left font-semibold hidden">Rank</th>
                                                     <th className="px-6 py-4 text-left font-semibold">County</th>
                                                     <th className="px-6 py-4 text-center font-semibold">Index Score</th>
-                                                    <th className="px-6 py-4 text-center font-semibold">Performance</th>
+                                                    <th className="px-6 py-4 text-center font-semibold hidden">Performance</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -223,8 +223,9 @@ export default function Home() {
                                                         const perf = getPerformanceBadge(row.score)
                                                         const slug = row.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
                                                         return (
+
                                                             <tr key={row.name} className="border-b hover:bg-slate-50 transition">
-                                                                <td className="px-6 py-4 font-semibold">#{row.rank}</td>
+                                                                <td className="px-6 py-4 font-semibold hidden">#{row.rank}</td>
                                                                 <td className="px-6 py-4">
                                                                     <Link
                                                                         to={`/county/${slug}`}
@@ -236,7 +237,7 @@ export default function Home() {
                                                                 <td className="px-6 py-4 text-center font-bold">
                                                                     {row.score.toFixed(1)}
                                                                 </td>
-                                                                <td className="px-6 py-4 text-center">
+                                                                <td className="px-6 py-4 text-center hidden">
                                                                     <Badge className={`rounded-full px-4 py-1.5 font-medium ${perf.color}`}>
                                                                         {perf.text}
                                                                     </Badge>
